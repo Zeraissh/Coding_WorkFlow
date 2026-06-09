@@ -30,15 +30,16 @@ Return ONLY valid JSON.`;
     }
 
     const text = contentText.text;
-    let jsonString = text;
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/);
+    const textWithoutThinking = text.replace(/<thinking>[\s\S]*?<\/thinking>/g, '');
+    let jsonString = textWithoutThinking;
+    const jsonMatch = textWithoutThinking.match(/```json\n([\s\S]*?)\n```/) || textWithoutThinking.match(/```\n([\s\S]*?)\n```/);
     if (jsonMatch) {
       jsonString = jsonMatch[1];
     } else {
-      const start = text.indexOf('{');
-      const end = text.lastIndexOf('}');
+      const start = textWithoutThinking.indexOf('{');
+      const end = textWithoutThinking.lastIndexOf('}');
       if (start !== -1 && end !== -1 && end > start) {
-        jsonString = text.substring(start, end + 1);
+        jsonString = textWithoutThinking.substring(start, end + 1);
       }
     }
 
