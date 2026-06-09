@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import { search } from 'duck-duck-scrape';
+import { fslock } from '../core/fslock';
 
 const execAsync = promisify(exec);
 
@@ -53,17 +54,24 @@ export const builtinTools = [
   }
 ];
 
-export async function executeBuiltinTool(name: string, args: any): Promise<string> {
+export async function executeBuiltinTool(name: string, args: any, agentId?: string): Promise<string> {
   try {
     switch (name) {
       case 'run_terminal_command':
         const { stdout, stderr } = await execAsync(args.command);
         return `STDOUT:\n${stdout}\nSTDERR:\n${stderr}`;
-      case 'read_file':
-        return fs.readFileSync(args.path, 'utf-8');
-      case 'write_file':
+      case 'read_file': {
+        if (agentId) await fslock().acquireRead(args.path, agentId);
+        const content = fs.readFileSync(args.path, 'utf-8');
+        if (agentId) fslock().release(args.path, agentId);
+        return content;
+      }
+      case 'write_file': {
+        if (agentId) await fslock().acquireWrite(args.path, agentId);
         fs.writeFileSync(args.path, args.content, 'utf-8');
+        if (agentId) fslock().release(args.path, agentId);
         return `Successfully wrote to ${args.path}`;
+      }
       case 'search_web':
         const searchResults = await search(args.query);
         return JSON.stringify(searchResults.results.slice(0, 5), null, 2);

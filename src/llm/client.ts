@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import * as dotenv from 'dotenv';
 import { workflowEvents } from '../core/events';
 import { GlobalConfig } from '../core/config';
+import { tokenBudget } from '../core/tokenBudget';
 
 dotenv.config();
 
@@ -77,15 +78,16 @@ export async function askLLM(
   tools?: Anthropic.Tool[],
   onToolCall?: (name: string, input: any) => Promise<string>,
   temperature: number = 0.7,
-  taskId?: string
+  taskId?: string,
+  agentId?: string
 ): Promise<Anthropic.Message> {
   const config = GlobalConfig.get();
 
   if (config.provider === 'openai' || config.provider === 'deepseek') {
-    return await askOpenAI(system, messages, tools, onToolCall, temperature, taskId, config);
+    return await askOpenAI(system, messages, tools, onToolCall, temperature, taskId, agentId, config);
   }
 
-  return await askAnthropic(system, messages, tools, onToolCall, temperature, taskId, config);
+  return await askAnthropic(system, messages, tools, onToolCall, temperature, taskId, agentId, config);
 }
 
 async function askOpenAI(
@@ -95,6 +97,7 @@ async function askOpenAI(
   onToolCall: ((name: string, input: any) => Promise<string>) | undefined,
   temperature: number,
   taskId: string | undefined,
+  agentId: string | undefined,
   config: any
 ): Promise<Anthropic.Message> {
   const openai = new OpenAI({
@@ -191,6 +194,12 @@ async function askOpenAI(
     text = `<thinking>\n${reasoning}\n</thinking>\n\n` + text;
   }
 
+  // --- Token 使用上报 ---
+  const totalTokens = (response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0);
+  if (agentId && totalTokens > 0) {
+    tokenBudget().reportUsage(agentId, totalTokens);
+  }
+
   return {
     id: response.id,
     type: 'message',
@@ -199,7 +208,7 @@ async function askOpenAI(
     content: [{ type: 'text', text }],
     stop_reason: 'end_turn',
     stop_sequence: null,
-    usage: { input_tokens: 0, output_tokens: 0 }
+    usage: { input_tokens: response.usage?.prompt_tokens || 0, output_tokens: response.usage?.completion_tokens || 0 }
   };
 }
 
@@ -210,6 +219,7 @@ async function askAnthropic(
   onToolCall: ((name: string, input: any) => Promise<string>) | undefined,
   temperature: number,
   taskId: string | undefined,
+  agentId: string | undefined,
   config: any
 ): Promise<Anthropic.Message> {
   const anthropic = new Anthropic({ apiKey: config.apiKey });
@@ -262,6 +272,12 @@ async function askAnthropic(
     } else {
       break;
     }
+  }
+
+  // --- Token 使用上报 ---
+  const totalTokens = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+  if (agentId && totalTokens > 0) {
+    tokenBudget().reportUsage(agentId, totalTokens);
   }
 
   return response;
