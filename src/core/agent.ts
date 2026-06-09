@@ -23,15 +23,19 @@ Please provide the best possible output for this sub-task.`;
     const toolExecutors = new Map<string, (args: any) => Promise<string>>();
 
     try {
+      // 1. Always inject built-in tools (read_file, write_file, run_terminal_command, etc.)
+      for (const tool of builtinTools) {
+        anthropicTools.push({
+          name: tool.name,
+          description: tool.description,
+          input_schema: tool.input_schema
+        });
+        toolExecutors.set(tool.name, async (args) => executeBuiltinTool(tool.name, args));
+      }
+
+      // 2. Inject dynamically retrieved tools (e.g. MCP)
       for (const record of toolRecords) {
-        if (record.source === 'builtin') {
-          anthropicTools.push({
-            name: record.name,
-            description: record.description,
-            input_schema: record.schema
-          });
-          toolExecutors.set(record.name, async (args) => executeBuiltinTool(record.name, args));
-        } else if (record.source === 'mcp' && record.mcpCommand) {
+        if (record.source === 'mcp' && record.mcpCommand) {
           const client = new MCPClientWrapper(record.mcpCommand[0], record.mcpCommand.slice(1));
           await client.connect();
           activeMcpClients.push(client);

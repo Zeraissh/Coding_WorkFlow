@@ -24,16 +24,6 @@ export class ToolRetriever {
       });
     }
 
-    // Register dummy MCP servers
-    await this.store.addTool({
-      id: `mcp_sqlite`,
-      name: `database_operations`,
-      description: `Run read-only SQL queries on local SQLite database. Useful for data analysis.`,
-      source: 'mcp',
-      mcpCommand: ['npx', '-y', '@modelcontextprotocol/server-sqlite', '--db', 'test.db'],
-      schema: { type: 'object' }
-    });
-
     this.initialized = true;
   }
 
