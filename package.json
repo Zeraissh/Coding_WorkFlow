@@ -1,0 +1,30 @@
+{
+  "name": "coding_workflow",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zeraissh/Coding_WorkFlow.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Zeraissh/Coding_WorkFlow/issues"
+  },
+  "homepage": "https://github.com/Zeraissh/Coding_WorkFlow#readme",
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.102.0",
+    "commander": "^15.0.0",
+    "dotenv": "^17.4.2"
+  }
+}
