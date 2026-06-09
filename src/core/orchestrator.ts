@@ -2,6 +2,7 @@ import { askLLM } from '../llm/client';
 import { Plan } from '../types/workflow';
 import { SubAgent } from './agent';
 import { Verifier } from './verifier';
+import { ToolRetriever } from './retriever';
 
 export class Orchestrator {
   async planWorkflow(goal: string): Promise<Plan> {
@@ -46,11 +47,18 @@ Return ONLY valid JSON.`;
     console.log(`Goal: ${plan.goal}`);
     console.log(`Sub-tasks generated: ${plan.tasks.length}`);
 
+    const retriever = new ToolRetriever();
+    await retriever.init();
+
     console.log(`\n=== Executing Sub-Agents in Parallel ===`);
     const agent = new SubAgent();
-    const taskPromises = plan.tasks.map(task => {
+    const taskPromises = plan.tasks.map(async task => {
+      console.log(`Retrieving tools for Task: [${task.id}]`);
+      const tools = await retriever.getRelevantTools(task.description);
+      console.log(`Task [${task.id}] acquired tools: ${tools.map(t => t.name).join(', ')}`);
+      
       console.log(`Starting Task: [${task.id}] ${task.description}`);
-      return agent.execute(task, plan.goal);
+      return agent.execute(task, plan.goal, tools);
     });
 
     const results = await Promise.all(taskPromises);
