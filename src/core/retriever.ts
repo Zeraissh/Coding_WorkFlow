@@ -1,5 +1,5 @@
-import { VectorStore, ToolRecord } from './registry/vector_store';
-import { builtinTools } from './builtin';
+import { VectorStore, ToolRecord } from '../tools/registry/vector_store';
+import { builtinTools } from '../tools/builtin';
 
 export class ToolRetriever {
   private store: VectorStore;
