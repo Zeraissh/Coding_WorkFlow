@@ -1,7 +1,7 @@
 import { askLLM } from '../llm/client';
 import { SubTask, TaskResult } from '../types/workflow';
 import { ToolRecord } from '../tools/registry/vector_store';
-import { executeBuiltinTool } from '../tools/builtin';
+import { executeBuiltinTool, builtinTools } from '../tools/builtin';
 import { MCPClientWrapper } from '../mcp/client';
 import { Tool } from '@anthropic-ai/sdk/resources/messages.js';
 
