@@ -75,7 +75,7 @@ function App() {
           return { ...t, logs: [...t.logs, data.message] };
         }
         return t;
-      });
+      }));
     });
 
     eventSource.addEventListener('taskCompleted', (e) => {
@@ -85,7 +85,7 @@ function App() {
           return { ...t, status: 'completed' };
         }
         return t;
-      });
+      }));
     });
 
     eventSource.addEventListener('approvalRequested', (e) => {
