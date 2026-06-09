@@ -22,16 +22,24 @@ You must return a JSON object that matches this schema:
 }
 Return ONLY valid JSON.`;
 
-    const response = await askLLM(systemPrompt, [{ role: 'user', content: goal }]);
+    const response = await askLLM(systemPrompt, [{ role: 'user', content: goal }], undefined, undefined, 0.7, 'orchestrator');
     
     const contentText = response.content.find(block => block.type === 'text');
     if (!contentText || contentText.type !== 'text') {
       throw new Error("Failed to get text response from LLM");
     }
 
-    const text = contentText.text;
+    let jsonString = text;
     const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/);
-    const jsonString = jsonMatch ? jsonMatch[1] : text;
+    if (jsonMatch) {
+      jsonString = jsonMatch[1];
+    } else {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start !== -1 && end !== -1 && end > start) {
+        jsonString = text.substring(start, end + 1);
+      }
+    }
 
     try {
       const plan = JSON.parse(jsonString) as Plan;
