@@ -1,16 +1,21 @@
-import { VectorStore, ToolRecord } from '../tools/registry/vector_store';
 import { builtinTools } from '../tools/builtin';
+import type { ToolRecord } from '../tools/registry/vector_store';
 
 export class ToolRetriever {
-  private store: VectorStore;
+  private store: any = null;
   private initialized = false;
 
   constructor() {
-    this.store = new VectorStore();
+    // VectorStore is lazily initialized to avoid loading native modules
+    // (hnswlib-node, @xenova/transformers) at startup
   }
 
   async init() {
     if (this.initialized) return;
+
+    // Dynamic import to defer native module loading
+    const { VectorStore } = await import('../tools/registry/vector_store');
+    this.store = new VectorStore();
     await this.store.init();
 
     // Register built-in tools
