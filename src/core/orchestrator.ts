@@ -29,6 +29,7 @@ Return ONLY valid JSON.`;
       throw new Error("Failed to get text response from LLM");
     }
 
+    const text = contentText.text;
     let jsonString = text;
     const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/);
     if (jsonMatch) {
