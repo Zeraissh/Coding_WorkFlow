@@ -3,6 +3,7 @@ import { Plan } from '../types/workflow';
 import { SubAgent } from './agent';
 import { Verifier } from './verifier';
 import { ToolRetriever } from './retriever';
+import { workflowEvents } from './events';
 
 export class Orchestrator {
   async planWorkflow(goal: string): Promise<Plan> {
@@ -42,34 +43,33 @@ Return ONLY valid JSON.`;
   }
 
   async executeWorkflow(goal: string): Promise<string> {
-    console.log(`\n=== Planning Workflow ===`);
+    workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Planning Workflow...' });
     const plan = await this.planWorkflow(goal);
-    console.log(`Goal: ${plan.goal}`);
-    console.log(`Sub-tasks generated: ${plan.tasks.length}`);
+    
+    workflowEvents.emit('workflowStarted', { goal: plan.goal, totalTasks: plan.tasks.length });
 
     const retriever = new ToolRetriever();
     await retriever.init();
 
-    console.log(`\n=== Executing Sub-Agents in Parallel ===`);
+    workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Executing Sub-Agents in Parallel...' });
     const agent = new SubAgent();
     const taskPromises = plan.tasks.map(async task => {
-      console.log(`Retrieving tools for Task: [${task.id}]`);
+      workflowEvents.emit('log', { taskId: task.id, message: `Retrieving tools...` });
       const tools = await retriever.getRelevantTools(task.description);
-      console.log(`Task [${task.id}] acquired tools: ${tools.map(t => t.name).join(', ')}`);
+      workflowEvents.emit('taskStarted', { taskId: task.id, description: task.description });
       
-      console.log(`Starting Task: [${task.id}] ${task.description}`);
-      return agent.execute(task, plan.goal, tools);
+      const result = await agent.execute(task, plan.goal, tools);
+      workflowEvents.emit('taskCompleted', { taskId: task.id, result: result.result, success: result.success });
+      return result;
     });
 
     const results = await Promise.all(taskPromises);
-    results.forEach(res => {
-      console.log(`Task [${res.taskId}] completed with success=${res.success}`);
-    });
 
-    console.log(`\n=== Verifying and Synthesizing ===`);
+    workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Verifying and Synthesizing...' });
     const verifier = new Verifier();
     const finalOutput = await verifier.verifyAndSynthesize(plan, results);
     
+    workflowEvents.emit('workflowCompleted', { result: finalOutput });
     return finalOutput;
   }
 }

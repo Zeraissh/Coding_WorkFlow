@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { Orchestrator } from './core/orchestrator';
+import { runInteractiveCLI } from './cli/interactive';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -32,6 +33,17 @@ program
       console.error("Workflow execution failed:", err);
       process.exit(1);
     }
+  });
+
+program
+  .command('chat')
+  .description('Start the interactive CLI session')
+  .action(async () => {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error("Error: ANTHROPIC_API_KEY is not set in the environment.");
+      process.exit(1);
+    }
+    await runInteractiveCLI();
   });
 
 program.parse();
