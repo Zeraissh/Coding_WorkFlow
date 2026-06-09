@@ -50,13 +50,13 @@ app.get('/api/stream', (req, res) => {
 
 app.post('/api/config', (req, res) => {
   if (typeof req.body.requireApproval === 'boolean') {
-    GlobalConfig.requireApproval = req.body.requireApproval;
+    GlobalConfig.update({ requireApproval: req.body.requireApproval });
   }
-  res.json({ requireApproval: GlobalConfig.requireApproval });
+  res.json({ requireApproval: GlobalConfig.get().requireApproval });
 });
 
 app.get('/api/config', (req, res) => {
-  res.json({ requireApproval: GlobalConfig.requireApproval });
+  res.json({ requireApproval: GlobalConfig.get().requireApproval });
 });
 
 app.post('/api/workflow', async (req, res) => {

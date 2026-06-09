@@ -1,6 +1,8 @@
 import { Command } from 'commander';
 import { Orchestrator } from './core/orchestrator';
 import { runInteractiveCLI } from './cli/interactive';
+import { runConfigCLI } from './cli/config';
+import { GlobalConfig } from './core/config';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -36,13 +38,34 @@ program
   });
 
 program
+  .command('config')
+  .description('Configure LLM provider, model, and API keys')
+  .action(async () => {
+    await runConfigCLI();
+  });
+
+program
   .command('chat')
   .description('Start the interactive CLI session')
   .action(async () => {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error("Error: ANTHROPIC_API_KEY is not set in the environment.");
-      process.exit(1);
+    let config = GlobalConfig.get();
+    
+    // Fallback to env var if file config is empty
+    if (!config.apiKey && process.env.ANTHROPIC_API_KEY && config.provider === 'anthropic') {
+      GlobalConfig.update({ apiKey: process.env.ANTHROPIC_API_KEY });
+      config = GlobalConfig.get();
     }
+
+    if (!config.apiKey) {
+      console.log("No API Key configured. Redirecting to configuration setup...\n");
+      await runConfigCLI();
+      config = GlobalConfig.get();
+      if (!config.apiKey) {
+        console.error("Configuration aborted. Exiting.");
+        process.exit(1);
+      }
+    }
+    
     await runInteractiveCLI();
   });
 

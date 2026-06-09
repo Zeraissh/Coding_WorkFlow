@@ -7,10 +7,12 @@ import { GlobalConfig } from '../core/config';
 export async function runInteractiveCLI() {
   p.intro(color.bgCyan(color.black(' Dynamic Workflow CLI ')));
 
-  GlobalConfig.requireApproval = await p.confirm({
-    message: 'Enable Human-in-the-Loop (HITL) approval for terminal commands?',
-    initialValue: true
-  }) as boolean;
+  GlobalConfig.update({
+    requireApproval: await p.confirm({
+      message: 'Enable Human-in-the-Loop (HITL) approval for terminal commands?',
+      initialValue: GlobalConfig.get().requireApproval
+    }) as boolean
+  });
 
   while (true) {
     const goal = await p.text({
