@@ -2,9 +2,10 @@
   "name": "coding_workflow",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "main": "index.js",
   "bin": {
-    "autocode": "./bin/autocode.js"
+    "autocode": "./bin/autocode.cjs"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

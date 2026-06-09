@@ -239,7 +239,7 @@ export class AutoChecker {
       if (path) imports.push(path);
     }
     while ((match = exportRegex.exec(content)) !== null) {
-      exports.push(match[1]);
+      if (match[1]) exports.push(match[1]);
     }
 
     return { imports: [...new Set(imports)], exports: [...new Set(exports)] };
@@ -300,12 +300,14 @@ export class AutoChecker {
     const regex = /(.+?)\((\d+),\d+\):\s+error\s+TS(\d+):\s+(.+)/g;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(raw)) !== null) {
-      errors.push({
-        file: match[1].trim(),
-        line: parseInt(match[2], 10),
-        code: parseInt(match[3], 10),
-        message: match[4].trim(),
-      });
+      if (match[1] && match[2] && match[3] && match[4]) {
+        errors.push({
+          file: match[1].trim(),
+          line: parseInt(match[2], 10),
+          code: parseInt(match[3], 10),
+          message: match[4].trim(),
+        });
+      }
     }
     return errors;
   }

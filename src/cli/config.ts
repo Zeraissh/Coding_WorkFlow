@@ -44,7 +44,7 @@ export async function runConfigCLI() {
   const model = await p.select({
     message: 'Select the model:',
     options: modelOptions,
-    initialValue: modelOptions.find(o => o.value === GlobalConfig.get().model)?.value || modelOptions[0].value
+    initialValue: modelOptions.find(o => o.value === GlobalConfig.get().model)?.value || modelOptions[0]?.value
   });
 
   if (p.isCancel(model)) return;

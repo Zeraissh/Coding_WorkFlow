@@ -12,8 +12,8 @@ if (process.platform === 'win32') {
 }
 
 // Pass all command line arguments to tsx and preserve stdio
-const result = spawnSync(tsxPath, [target, ...process.argv.slice(2)], { 
-  stdio: 'inherit' 
+const result = spawnSync(tsxPath, [target, ...process.argv.slice(2)], {
+  stdio: 'inherit'
 });
 
 if (result.error) {

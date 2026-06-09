@@ -58,7 +58,7 @@ Please provide the best possible output for this sub-task.`;
         anthropicTools.push({
           name: tool.name,
           description: tool.description,
-          input_schema: tool.input_schema
+          input_schema: tool.input_schema as Tool.InputSchema
         });
         toolExecutors.set(tool.name, async (args) => {
           // 记录文件操作
@@ -88,7 +88,7 @@ Please provide the best possible output for this sub-task.`;
 
       // 2. Inject dynamically retrieved tools (e.g. MCP)
       for (const record of toolRecords) {
-        if (record.source === 'mcp' && record.mcpCommand) {
+        if (record.source === 'mcp' && record.mcpCommand && record.mcpCommand[0]) {
           const client = new MCPClientWrapper(record.mcpCommand[0], record.mcpCommand.slice(1));
           await client.connect();
           activeMcpClients.push(client);
@@ -104,12 +104,13 @@ Please provide the best possible output for this sub-task.`;
       // --- Token 预算检查 ---
       const budgetCheck = tokenBudget().checkBudget(this.agentId);
       if (!budgetCheck.canContinue) {
-        return {
+        const result: TaskResult = {
           taskId: task.id,
           result: budgetCheck.warning || 'Budget exhausted',
           success: false,
-          error: budgetCheck.warning,
         };
+        if (budgetCheck.warning) result.error = budgetCheck.warning;
+        return result;
       }
 
       const response = await askLLM(

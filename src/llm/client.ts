@@ -128,35 +128,37 @@ async function askOpenAI(
 
   let response = await openai.chat.completions.create(options);
 
-  while (response.choices[0].message.tool_calls && onToolCall) {
-    const msg = response.choices[0].message;
-    
+  while (response.choices[0]!.message.tool_calls && onToolCall) {
+    const msg = response.choices[0]!.message;
+
     const anthropicContent: any[] = [];
     if (msg.content) {
       anthropicContent.push({ type: 'text', text: msg.content });
     }
-    for (const call of msg.tool_calls || []) {
+    for (const call of (msg.tool_calls || [])) {
+      const c = call as any;
       anthropicContent.push({
         type: 'tool_use',
-        id: call.id,
-        name: call.function.name,
-        input: JSON.parse(call.function.arguments)
+        id: c.id,
+        name: c.function.name,
+        input: JSON.parse(c.function.arguments)
       });
     }
     messages.push({ role: 'assistant', content: anthropicContent });
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
-    for (const call of msg.tool_calls || []) {
+    for (const call of (msg.tool_calls || [])) {
+      const c = call as any;
       try {
-        const inputArgs = JSON.parse(call.function.arguments);
-        if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Call] ${call.function.name}` });
+        const inputArgs = JSON.parse(c.function.arguments);
+        if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Call] ${c.function.name}` });
 
-        if (config.requireApproval && call.function.name === 'run_terminal_command') {
+        if (config.requireApproval && c.function.name === 'run_terminal_command') {
           await new Promise<void>((resolve, reject) => {
             workflowEvents.emit('approvalRequested', {
               taskId: taskId || 'unknown',
-              toolName: call.function.name,
+              toolName: c.function.name,
               arguments: inputArgs,
               resolve,
               reject
@@ -164,10 +166,10 @@ async function askOpenAI(
           });
         }
 
-        const result = await onToolCall(call.function.name, inputArgs);
+        const result = await onToolCall(c.function.name, inputArgs);
         if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Result] ${result.slice(0, 100)}...` });
 
-        toolResults.push({ type: 'tool_result', tool_use_id: call.id, content: result });
+        toolResults.push({ type: 'tool_result', tool_use_id: c.id, content: result });
       } catch (err: any) {
         if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Error] ${err.message}` });
         toolResults.push({ type: 'tool_result', tool_use_id: call.id, content: `Error: ${err.message}`, is_error: true });
@@ -186,9 +188,9 @@ async function askOpenAI(
     }
   }
 
-  const finalMsg = response.choices[0].message;
+  const finalMsg = response.choices[0]!.message;
   let text = finalMsg.content || '';
-  
+
   const reasoning = (finalMsg as any).reasoning_content;
   if (reasoning) {
     text = `<thinking>\n${reasoning}\n</thinking>\n\n` + text;
@@ -205,11 +207,11 @@ async function askOpenAI(
     type: 'message',
     role: 'assistant',
     model: config.model,
-    content: [{ type: 'text', text }],
+    content: [{ type: 'text', text, citations: null }],
     stop_reason: 'end_turn',
     stop_sequence: null,
     usage: { input_tokens: response.usage?.prompt_tokens || 0, output_tokens: response.usage?.completion_tokens || 0 }
-  };
+  } as Anthropic.Message;
 }
 
 async function askAnthropic(

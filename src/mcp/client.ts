@@ -17,7 +17,7 @@ export class MCPClientWrapper {
     }, {
       capabilities: {
         tools: {}
-      }
+      } as any
     });
   }
 
@@ -41,8 +41,8 @@ export class MCPClientWrapper {
       arguments: args
     });
     
-    if (result.content && result.content.length > 0) {
-      const textContents = result.content
+    if (result.content && (result.content as any).length > 0) {
+      const textContents = (result.content as any[])
         .filter((c: any) => c.type === 'text')
         .map((c: any) => c.text);
       return textContents.join('\n');

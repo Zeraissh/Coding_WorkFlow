@@ -208,7 +208,7 @@ ${dimensionsSection}
   private parseReviewResponse(raw: string): SemanticIssue[] {
     // 提取 JSON 块
     const jsonMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
-    const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
+    const jsonStr = (jsonMatch?.[1] ?? raw).trim();
 
     try {
       const parsed = JSON.parse(jsonStr);

@@ -146,7 +146,7 @@ export class Decomposer {
 
     // 先尝试从 ```json 代码块提取
     const jsonBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
-    const jsonStr = jsonBlockMatch ? jsonBlockMatch[1].trim() : raw.trim();
+    const jsonStr = (jsonBlockMatch?.[1] ?? raw).trim();
 
     try {
       json = JSON.parse(jsonStr);
@@ -202,7 +202,7 @@ export class Decomposer {
     });
 
     const jsonMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
-    const jsonStr = jsonMatch ? jsonMatch[1].trim() : response.trim();
+    const jsonStr = (jsonMatch?.[1] ?? response).trim();
 
     try {
       return JSON.parse(jsonStr);

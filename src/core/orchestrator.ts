@@ -106,7 +106,7 @@ Return ONLY valid JSON.`;
     const textWithoutThinking = text.replace(/<thinking>[\s\S]*?<\/thinking>/g, '');
     let jsonString = textWithoutThinking;
     const jsonMatch = textWithoutThinking.match(/```json\n([\s\S]*?)\n```/) || textWithoutThinking.match(/```\n([\s\S]*?)\n```/);
-    if (jsonMatch) {
+    if (jsonMatch && jsonMatch[1]) {
       jsonString = jsonMatch[1];
     } else {
       const start = textWithoutThinking.indexOf('{');
@@ -155,15 +155,15 @@ Return ONLY valid JSON.`;
     const batches = plan.parallelBatches || [plan.tasks];
 
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-      const batch = batches[batchIndex];
+      const batch = batches[batchIndex]!;
       workflowEvents.emit('log', {
         taskId: 'orchestrator',
-        message: `Executing batch ${batchIndex + 1}/${batches.length} (${batch.length} tasks in parallel)...`,
+        message: `Executing batch ${batchIndex + 1}/${batches.length} (${batch!.length} tasks in parallel)...`,
       });
 
       const batchAgents: SubAgent[] = [];
 
-      const batchPromises = batch.map(async (task) => {
+      const batchPromises = batch!.map(async (task) => {
         workflowEvents.emit('log', { taskId: task.id, message: `Retrieving tools...` });
         const tools = await retriever.getRelevantTools(task.description);
         workflowEvents.emit('taskStarted', { taskId: task.id, description: task.description });

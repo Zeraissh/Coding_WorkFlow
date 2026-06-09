@@ -61,7 +61,7 @@ export interface BudgetCheck {
   remaining: number;
   allocated: number;
   spent: number;
-  warning?: string;
+  warning?: string | undefined;
 }
 
 export interface BudgetReport {
@@ -220,7 +220,7 @@ export class TokenBudgetManager {
     this.budget = {
       total: totalBudget,
       spent: 0,
-      allocated: new Map(subtasks.map((t, i) => [t.id, allocations[i].allocatedTokens])),
+      allocated: new Map(subtasks.map((t, i) => [t.id, allocations[i]!.allocatedTokens])),
       taskSpent: new Map(subtasks.map((t) => [t.id, 0])),
       agentSpent: new Map(allocations.map((a) => [a.agentId, 0])),
       reserved,
