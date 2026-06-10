@@ -137,7 +137,7 @@ export function clamp(value: number, lower: number, upper: number): number {
  */
 export function round(value: number, decimals: number = 0): number {
   const factor = Math.pow(10, decimals);
-  return Math.round(value * factor) / factor;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
 /**

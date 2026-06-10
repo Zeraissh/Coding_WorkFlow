@@ -1,18 +1,14 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.MCPClientWrapper = void 0;
-const index_js_1 = require("@modelcontextprotocol/sdk/client/index.js");
-const stdio_js_1 = require("@modelcontextprotocol/sdk/client/stdio.js");
-const messages_js_1 = require("@anthropic-ai/sdk/resources/messages.js");
-class MCPClientWrapper {
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+export class MCPClientWrapper {
     client;
     transport;
     constructor(command, args) {
-        this.transport = new stdio_js_1.StdioClientTransport({
+        this.transport = new StdioClientTransport({
             command,
             args
         });
-        this.client = new index_js_1.Client({
+        this.client = new Client({
             name: "dynamic-workflow-client",
             version: "1.0.0"
         }, {
@@ -49,5 +45,4 @@ class MCPClientWrapper {
         await this.client.close();
     }
 }
-exports.MCPClientWrapper = MCPClientWrapper;
 //# sourceMappingURL=client.js.map

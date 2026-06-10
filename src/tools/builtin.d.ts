@@ -11,6 +11,10 @@ export declare const builtinTools: ({
             path?: never;
             content?: never;
             query?: never;
+            dirPath?: never;
+            depth?: never;
+            topK?: never;
+            pattern?: never;
         };
         required: string[];
     };
@@ -27,6 +31,10 @@ export declare const builtinTools: ({
             command?: never;
             content?: never;
             query?: never;
+            dirPath?: never;
+            depth?: never;
+            topK?: never;
+            pattern?: never;
         };
         required: string[];
     };
@@ -46,6 +54,10 @@ export declare const builtinTools: ({
             };
             command?: never;
             query?: never;
+            dirPath?: never;
+            depth?: never;
+            topK?: never;
+            pattern?: never;
         };
         required: string[];
     };
@@ -62,9 +74,83 @@ export declare const builtinTools: ({
             command?: never;
             path?: never;
             content?: never;
+            dirPath?: never;
+            depth?: never;
+            topK?: never;
+            pattern?: never;
+        };
+        required: string[];
+    };
+} | {
+    name: string;
+    description: string;
+    input_schema: {
+        type: string;
+        properties: {
+            dirPath: {
+                type: string;
+                description: string;
+            };
+            depth: {
+                type: string;
+                description: string;
+            };
+            command?: never;
+            path?: never;
+            content?: never;
+            query?: never;
+            topK?: never;
+            pattern?: never;
+        };
+        required: string[];
+    };
+} | {
+    name: string;
+    description: string;
+    input_schema: {
+        type: string;
+        properties: {
+            query: {
+                type: string;
+                description: string;
+            };
+            topK: {
+                type: string;
+                description: string;
+            };
+            command?: never;
+            path?: never;
+            content?: never;
+            dirPath?: never;
+            depth?: never;
+            pattern?: never;
+        };
+        required: string[];
+    };
+} | {
+    name: string;
+    description: string;
+    input_schema: {
+        type: string;
+        properties: {
+            pattern: {
+                type: string;
+                description: string;
+            };
+            dirPath: {
+                type: string;
+                description: string;
+            };
+            command?: never;
+            path?: never;
+            content?: never;
+            query?: never;
+            depth?: never;
+            topK?: never;
         };
         required: string[];
     };
 })[];
-export declare function executeBuiltinTool(name: string, args: any): Promise<string>;
+export declare function safeListDir(dir: string, maxDepth: number, currentDepth?: number): string[];
+export declare function executeBuiltinTool(name: string, args: any, agentId?: string): Promise<string>;
 //# sourceMappingURL=builtin.d.ts.map

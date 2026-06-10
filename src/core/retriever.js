@@ -1,20 +1,20 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.ToolRetriever = void 0;
-const vector_store_1 = require("./registry/vector_store");
-const builtin_1 = require("./builtin");
-class ToolRetriever {
-    store;
+import { builtinTools } from '../tools/builtin';
+export class ToolRetriever {
+    store = null;
     initialized = false;
     constructor() {
-        this.store = new vector_store_1.VectorStore();
+        // VectorStore is lazily initialized to avoid loading native modules
+        // (hnswlib-node, @xenova/transformers) at startup
     }
     async init() {
         if (this.initialized)
             return;
+        // Dynamic import to defer native module loading
+        const { VectorStore } = await import('../tools/registry/vector_store');
+        this.store = new VectorStore();
         await this.store.init();
         // Register built-in tools
-        for (const tool of builtin_1.builtinTools) {
+        for (const tool of builtinTools) {
             await this.store.addTool({
                 id: `builtin_${tool.name}`,
                 name: tool.name,
@@ -23,15 +23,6 @@ class ToolRetriever {
                 schema: tool.input_schema
             });
         }
-        // Register dummy MCP servers
-        await this.store.addTool({
-            id: `mcp_sqlite`,
-            name: `database_operations`,
-            description: `Run read-only SQL queries on local SQLite database. Useful for data analysis.`,
-            source: 'mcp',
-            mcpCommand: ['npx', '-y', '@modelcontextprotocol/server-sqlite', '--db', 'test.db'],
-            schema: { type: 'object' }
-        });
         this.initialized = true;
     }
     async getRelevantTools(taskDescription) {
@@ -39,5 +30,4 @@ class ToolRetriever {
         return this.store.searchTools(taskDescription, 3);
     }
 }
-exports.ToolRetriever = ToolRetriever;
 //# sourceMappingURL=retriever.js.map

@@ -1,0 +1,319 @@
+{
+  "meta": {
+    "generatedAt": "2025-07-18",
+    "source": "PLAN.md",
+    "project": "Coding_WorkFlow",
+    "totalTasks": 20,
+    "totalPhases": 5,
+    "immediateActions": 4
+  },
+  "phases": [
+    {
+      "id": 1,
+      "title": "测试与验证 (Testing & Verification)",
+      "priority": "high",
+      "description": "运行现有测试套件，确保核心功能正确性",
+      "tasks": [
+        {
+          "id": "1.1",
+          "title": "运行现有测试套件",
+          "description": "执行 `npx vitest run` 检查 TypeScript 端测试",
+          "command": "cd D:\\Work\\Github_pros\\Coding_WorkFlow && npx vitest run --reporter=verbose",
+          "expectedOutput": "测试结果报告",
+          "status": "pending",
+          "type": "test",
+          "language": "typescript"
+        },
+        {
+          "id": "1.2",
+          "title": "运行 Python 测试",
+          "description": "执行 `pytest tests/` 检查 Python 端测试",
+          "command": "cd D:\\Work\\Github_pros\\Coding_WorkFlow && pytest tests/",
+          "expectedOutput": "测试结果报告",
+          "status": "pending",
+          "type": "test",
+          "language": "python"
+        },
+        {
+          "id": "1.3",
+          "title": "端到端集成测试",
+          "description": "使用模拟 LLM 响应测试完整的 Orchestrator → Agent → Verifier 流程",
+          "command": null,
+          "expectedOutput": "集成测试通过",
+          "status": "pending",
+          "type": "test",
+          "manual": true,
+          "language": "typescript"
+        },
+        {
+          "id": "1.4",
+          "title": "CLI 冒烟测试",
+          "description": "测试 `autocode chat`, `autocode config`, `autocode run` 命令",
+          "command": "node bin/autocode.cjs --help",
+          "expectedOutput": "CLI 可用性确认",
+          "status": "pending",
+          "type": "test",
+          "language": "typescript"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Bug 修复与健壮性 (Bug Fix & Robustness)",
+      "priority": "high",
+      "description": "增强错误处理、边界条件和用户体验",
+      "tasks": [
+        {
+          "id": "2.1",
+          "title": "错误处理增强",
+          "description": "审查所有 try/catch 块，确保错误信息清晰",
+          "command": null,
+          "expectedOutput": "改进的错误处理",
+          "status": "pending",
+          "type": "fix",
+          "manual": true
+        },
+        {
+          "id": "2.2",
+          "title": "配置缺失处理",
+          "description": "当 API Key 未配置时提供友好提示和引导",
+          "command": null,
+          "expectedOutput": "更好的 UX",
+          "status": "pending",
+          "type": "fix",
+          "manual": true
+        },
+        {
+          "id": "2.3",
+          "title": "空状态处理",
+          "description": "处理无工具、无子任务、空项目等边界情况",
+          "command": null,
+          "expectedOutput": "边界情况覆盖",
+          "status": "pending",
+          "type": "fix",
+          "manual": true
+        },
+        {
+          "id": "2.4",
+          "title": "JSON 解析容错",
+          "description": "LLM 返回非标准 JSON 时的容错与重试",
+          "command": null,
+          "expectedOutput": "解析健壮性",
+          "status": "pending",
+          "type": "fix",
+          "manual": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "性能优化 (Performance Optimization)",
+      "priority": "medium",
+      "description": "优化并发、缓存和文件扫描性能",
+      "tasks": [
+        {
+          "id": "3.1",
+          "title": "并发控制优化",
+          "description": "审查 `Promise.all` 的并发数限制",
+          "command": null,
+          "expectedOutput": "可控并发数",
+          "status": "pending",
+          "type": "optimization",
+          "manual": true
+        },
+        {
+          "id": "3.2",
+          "title": "Token 缓存利用",
+          "description": "利用 Anthropic prompt caching 减少重复上下文成本",
+          "command": null,
+          "expectedOutput": "成本降低",
+          "status": "pending",
+          "type": "optimization",
+          "manual": true
+        },
+        {
+          "id": "3.3",
+          "title": "文件扫描优化",
+          "description": "大项目的 `safeListDir` 性能优化",
+          "command": null,
+          "expectedOutput": "更快的项目扫描",
+          "status": "pending",
+          "type": "optimization",
+          "manual": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "文档与发布 (Documentation & Release)",
+      "priority": "medium",
+      "description": "完善文档、示例和发布准备",
+      "tasks": [
+        {
+          "id": "4.1",
+          "title": "API 文档",
+          "description": "为核心模块生成 JSDoc/TSDoc 文档",
+          "command": null,
+          "expectedOutput": "API 参考文档",
+          "status": "pending",
+          "type": "documentation",
+          "manual": true
+        },
+        {
+          "id": "4.2",
+          "title": "用户指南更新",
+          "description": "更新 README.md 和 USAGE.md",
+          "command": null,
+          "expectedOutput": "完整的用户文档",
+          "status": "pending",
+          "type": "documentation",
+          "manual": true
+        },
+        {
+          "id": "4.3",
+          "title": "示例项目",
+          "description": "创建示例 workflows 供用户参考",
+          "command": null,
+          "expectedOutput": "示例文件",
+          "status": "pending",
+          "type": "documentation",
+          "manual": true
+        },
+        {
+          "id": "4.4",
+          "title": "npm 发布准备",
+          "description": "检查 package.json, 版本号, 发布脚本",
+          "command": "npm outdated",
+          "expectedOutput": "可发布的包",
+          "status": "pending",
+          "type": "release",
+          "language": "typescript"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "高级功能 (Advanced Features)",
+      "priority": "low",
+      "description": "扩展高级功能：仪表盘、插件、记忆、模板",
+      "tasks": [
+        {
+          "id": "5.1",
+          "title": "Web Dashboard 完善",
+          "description": "完善 React 前端的状态展示和交互",
+          "command": null,
+          "expectedOutput": "完整的仪表盘",
+          "status": "pending",
+          "type": "feature",
+          "manual": true
+        },
+        {
+          "id": "5.2",
+          "title": "插件系统",
+          "description": "支持第三方工具插件",
+          "command": null,
+          "expectedOutput": "插件接口",
+          "status": "pending",
+          "type": "feature",
+          "manual": true
+        },
+        {
+          "id": "5.3",
+          "title": "多轮对话记忆",
+          "description": "Agent 跨任务的长期记忆",
+          "command": null,
+          "expectedOutput": "记忆增强",
+          "status": "pending",
+          "type": "feature",
+          "manual": true
+        },
+        {
+          "id": "5.4",
+          "title": "工作流模板",
+          "description": "预定义的工作流模板库",
+          "command": null,
+          "expectedOutput": "模板库",
+          "status": "pending",
+          "type": "feature",
+          "manual": true
+        }
+      ]
+    }
+  ],
+  "immediateActions": [
+    {
+      "id": "action-1",
+      "title": "运行测试套件",
+      "description": "执行 vitest 运行全部测试",
+      "command": "cd D:\\Work\\Github_pros\\Coding_WorkFlow && npx vitest run --reporter=verbose",
+      "phase": 1,
+      "taskRef": "1.1",
+      "status": "pending"
+    },
+    {
+      "id": "action-2",
+      "title": "验证编译产物",
+      "description": "TypeScript 类型检查",
+      "command": "cd D:\\Work\\Github_pros\\Coding_WorkFlow && npx tsc --noEmit",
+      "phase": 1,
+      "taskRef": null,
+      "status": "pending"
+    },
+    {
+      "id": "action-3",
+      "title": "测试 CLI 入口",
+      "description": "验证 CLI 帮助信息正常输出",
+      "command": "cd D:\\Work\\Github_pros\\Coding_WorkFlow && node bin/autocode.cjs --help",
+      "phase": 1,
+      "taskRef": "1.4",
+      "status": "pending"
+    },
+    {
+      "id": "action-4",
+      "title": "检查依赖版本",
+      "description": "检查过时的 npm 依赖",
+      "command": "cd D:\\Work\\Github_pros\\Coding_WorkFlow && npm outdated",
+      "phase": 4,
+      "taskRef": "4.4",
+      "status": "pending"
+    }
+  ],
+  "successCriteria": [
+    "TypeScript 编译零错误",
+    "现有测试全部通过",
+    "端到端流程可完成（输入目标 → 输出结果）",
+    "CLI 三个命令 (chat/config/run) 可正常启动",
+    "多供应商 (Anthropic/OpenAI/DeepSeek) 可切换"
+  ],
+  "risks": [
+    {
+      "risk": "LLM API 调用失败",
+      "impact": "工作流中断",
+      "mitigation": "重试逻辑 + 降级回退方案"
+    },
+    {
+      "risk": "并发文件冲突",
+      "impact": "代码损坏",
+      "mitigation": "FSLock + SnapshotManager 回滚"
+    },
+    {
+      "risk": "Token 成本失控",
+      "impact": "预算超支",
+      "mitigation": "TokenBudget 三级熔断"
+    },
+    {
+      "risk": "LLM 输出格式错误",
+      "impact": "解析失败",
+      "mitigation": "JSON 修复 + fallback 逻辑"
+    }
+  ],
+  "executionOrder": {
+    "strategy": "sequential_by_phase",
+    "description": "按阶段顺序执行：先测试验证 (Phase 1) → Bug修复 (Phase 2) → 性能优化 (Phase 3) → 文档发布 (Phase 4) → 高级功能 (Phase 5)。优先执行 immediateActions，然后按 phase 顺序执行 tasks。",
+    "parallelizable": {
+      "withinPhase": true,
+      "acrossPhases": false,
+      "notes": "同一阶段内无依赖的任务可并行执行，阶段间有先后依赖关系"
+    }
+  }
+}

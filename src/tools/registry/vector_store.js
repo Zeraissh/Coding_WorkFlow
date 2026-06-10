@@ -1,12 +1,6 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.VectorStore = void 0;
-const transformers_1 = require("@xenova/transformers");
-const hnswlib_node_1 = __importDefault(require("hnswlib-node"));
-class VectorStore {
+import { pipeline } from '@xenova/transformers';
+import hnswlib from 'hnswlib-node';
+export class VectorStore {
     dim;
     index;
     extractFeatures = null;
@@ -14,12 +8,12 @@ class VectorStore {
     numElements = 0;
     constructor(dim = 384) {
         this.dim = dim;
-        this.index = new hnswlib_node_1.default.HierarchicalNSW('cosine', dim);
+        this.index = new hnswlib.HierarchicalNSW('cosine', dim);
         this.index.initIndex(100);
     }
     async init() {
         // using all-MiniLM-L6-v2 which has 384 dimensions
-        this.extractFeatures = await (0, transformers_1.pipeline)('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        this.extractFeatures = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     }
     async getEmbedding(text) {
         const out = await this.extractFeatures(text, { pooling: 'mean', normalize: true });
@@ -40,5 +34,4 @@ class VectorStore {
         return result.neighbors.map(idx => this.toolsMap.get(idx));
     }
 }
-exports.VectorStore = VectorStore;
 //# sourceMappingURL=vector_store.js.map

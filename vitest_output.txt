@@ -1,0 +1,125 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90mD:/Work/Github_pros/Coding_WorkFlow[39m
+
+ [31m❯[39m .workflow/snapshots/snap_1781067193515/tests/utils/math.test.ts [2m([22m[2m110 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 18[2mms[22m[39m
+     [32m✓[39m adds two positive numbers[32m 1[2mms[22m[39m
+     [32m✓[39m adds a positive and a negative number[32m 0[2mms[22m[39m
+     [32m✓[39m adds two negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m adds zero correctly[32m 0[2mms[22m[39m
+     [32m✓[39m handles floating point numbers[32m 0[2mms[22m[39m
+     [32m✓[39m subtracts two positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m subtracts a positive from a negative[32m 0[2mms[22m[39m
+     [32m✓[39m subtracting zero[32m 0[2mms[22m[39m
+     [32m✓[39m handles floating point numbers[32m 0[2mms[22m[39m
+     [32m✓[39m multiplies two positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m multiplies by zero results in zero[32m 0[2mms[22m[39m
+     [32m✓[39m multiplies negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m handles floating point[32m 0[2mms[22m[39m
+     [32m✓[39m divides two positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m divides by 1 returns the dividend[32m 0[2mms[22m[39m
+     [32m✓[39m divides negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m handles floating point division[32m 0[2mms[22m[39m
+     [32m✓[39m throws on division by zero[32m 0[2mms[22m[39m
+     [32m✓[39m throws on zero divided by zero[32m 0[2mms[22m[39m
+     [32m✓[39m divides normally when divisor is non-zero[32m 0[2mms[22m[39m
+     [32m✓[39m returns fallback (default 0) when divisor is zero[32m 0[2mms[22m[39m
+     [32m✓[39m returns custom fallback when divisor is zero[32m 0[2mms[22m[39m
+     [32m✓[39m does not use fallback when divisor is non-zero[32m 0[2mms[22m[39m
+     [32m✓[39m returns remainder of positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m returns 0 when divisible[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative dividend[32m 0[2mms[22m[39m
+     [32m✓[39m throws on modulo by zero[32m 0[2mms[22m[39m
+     [32m✓[39m sums a list of positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m sums negative and positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m returns 0 for empty arguments[32m 1[2mms[22m[39m
+     [32m✓[39m returns the number itself for a single argument[32m 0[2mms[22m[39m
+     [32m✓[39m computes average of positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m computes average with negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m returns 0 for empty arguments[32m 0[2mms[22m[39m
+     [32m✓[39m returns the value for a single number[32m 0[2mms[22m[39m
+     [32m✓[39m handles floating point average[32m 0[2mms[22m[39m
+     [32m✓[39m returns the middle value for odd count[32m 0[2mms[22m[39m
+     [32m✓[39m returns average of two middle values for even count[32m 0[2mms[22m[39m
+     [32m✓[39m returns 0 for empty arguments[32m 0[2mms[22m[39m
+     [32m✓[39m returns the single value for one argument[32m 0[2mms[22m[39m
+     [32m✓[39m handles unsorted input[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m returns smallest number[32m 0[2mms[22m[39m
+     [32m✓[39m returns Infinity for empty arguments[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m handles single argument[32m 0[2mms[22m[39m
+     [32m✓[39m returns largest number[32m 0[2mms[22m[39m
+     [32m✓[39m returns -Infinity for empty arguments[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m handles single argument[32m 0[2mms[22m[39m
+     [32m✓[39m returns value when within range[32m 0[2mms[22m[39m
+     [32m✓[39m returns lower bound when value is below range[32m 0[2mms[22m[39m
+     [32m✓[39m returns upper bound when value is above range[32m 0[2mms[22m[39m
+     [32m✓[39m works when lower equals upper[32m 0[2mms[22m[39m
+     [32m✓[39m throws when lower > upper[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative ranges[32m 0[2mms[22m[39m
+     [32m✓[39m rounds to 0 decimal places by default[32m 0[2mms[22m[39m
+     [32m✓[39m rounds to specified decimal places[32m 0[2mms[22m[39m
+     [32m✓[39m handles 0 decimals explicitly[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative value[32m 0[2mms[22m[39m
+[31m     [31m×[31m handles large decimal places[39m[32m 5[2mms[22m[39m
+     [32m✓[39m returns true for even integers[32m 0[2mms[22m[39m
+     [32m✓[39m returns false for odd integers[32m 0[2mms[22m[39m
+     [32m✓[39m returns false for non-integer numbers[32m 0[2mms[22m[39m
+     [32m✓[39m returns false for NaN[32m 0[2mms[22m[39m
+     [32m✓[39m returns false for Infinity[32m 0[2mms[22m[39m
+     [32m✓[39m returns true for odd integers[32m 0[2mms[22m[39m
+     [32m✓[39m returns false for even integers[32m 0[2mms[22m[39m
+     [32m✓[39m returns false for non-integer numbers[32m 0[2mms[22m[39m
+     [32m✓[39m returns false for NaN[32m 0[2mms[22m[39m
+     [32m✓[39m returns 1 for 0! and 1![32m 0[2mms[22m[39m
+     [32m✓[39m computes factorial for positive integers[32m 0[2mms[22m[39m
+     [32m✓[39m computes factorial for larger numbers[32m 0[2mms[22m[39m
+     [32m✓[39m throws for negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m throws for non-integer numbers[32m 0[2mms[22m[39m
+     [32m✓[39m computes positive exponent[32m 0[2mms[22m[39m
+     [32m✓[39m computes exponent 0 returns 1[32m 0[2mms[22m[39m
+     [32m✓[39m computes exponent 1 returns base[32m 0[2mms[22m[39m
+     [32m✓[39m computes negative exponent[32m 0[2mms[22m[39m
+     [32m✓[39m handles fractional exponent (square root)[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative base[32m 0[2mms[22m[39m
+     [32m✓[39m computes square root of perfect squares[32m 0[2mms[22m[39m
+     [32m✓[39m computes square root of non-perfect squares[32m 0[2mms[22m[39m
+     [32m✓[39m throws on negative numbers[32m 0[2mms[22m[39m
+     [32m✓[39m converts 0 degrees to 0 radians[32m 0[2mms[22m[39m
+     [32m✓[39m converts 180 degrees to PI radians[32m 0[2mms[22m[39m
+     [32m✓[39m converts 360 degrees to 2 * PI radians[32m 0[2mms[22m[39m
+     [32m✓[39m converts 90 degrees to PI/2 radians[32m 0[2mms[22m[39m
+     [32m✓[39m converts negative degrees[32m 0[2mms[22m[39m
+     [32m✓[39m converts 0 radians to 0 degrees[32m 0[2mms[22m[39m
+     [32m✓[39m converts PI radians to 180 degrees[32m 0[2mms[22m[39m
+     [32m✓[39m converts 2 * PI radians to 360 degrees[32m 0[2mms[22m[39m
+     [32m✓[39m converts PI/2 radians to 90 degrees[32m 0[2mms[22m[39m
+     [32m✓[39m converts negative radians[32m 0[2mms[22m[39m
+     [32m✓[39m returns a when t = 0[32m 0[2mms[22m[39m
+     [32m✓[39m returns b when t = 1[32m 0[2mms[22m[39m
+     [32m✓[39m returns midpoint when t = 0.5[32m 0[2mms[22m[39m
+     [32m✓[39m extrapolates when t < 0[32m 0[2mms[22m[39m
+     [32m✓[39m extrapolates when t > 1[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative range[32m 0[2mms[22m[39m
+     [32m✓[39m computes GCD of two positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m computes GCD when one number is 0[32m 0[2mms[22m[39m
+     [32m✓[39m computes GCD of two zeros (returns 0)[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative numbers (uses absolute values)[32m 0[2mms[22m[39m
+     [32m✓[39m computes GCD of equal numbers[32m 0[2mms[22m[39m
+     [32m✓[39m computes LCM of two positive numbers[32m 0[2mms[22m[39m
+     [32m✓[39m returns 0 when either number is 0[32m 0[2mms[22m[39m
+     [32m✓[39m handles negative numbers (uses absolute values)[32m 0[2mms[22m[39m
+     [32m✓[39m computes LCM of equal numbers[32m 0[2mms[22m[39m
+     [32m✓[39m computes LCM of coprime numbers[32m 1[2mms[22m[39m
+ [32m✓[39m tests/utils/math.test.ts [2m([22m[2m110 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/stringReverse.test.ts [2m([22m[2m50 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m tests/utils/math.test.js [2m([22m[2m110 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/stringReverse.test.js [2m([22m[2m50 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m .workflow/snapshots/snap_1781067193515/tests/stringReverse.test.ts [2m([22m[2m50 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m479 passed[39m[22m[90m (480)[39m
+[2m   Start at [22m 13:00:46
+[2m   Duration [22m 283ms[2m (transform 242ms, setup 0ms, import 417ms, tests 118ms, environment 0ms)[22m
+

@@ -1,4 +1,4 @@
-import { ToolRecord } from './registry/vector_store';
+import type { ToolRecord } from '../tools/registry/vector_store';
 export declare class ToolRetriever {
     private store;
     private initialized;
