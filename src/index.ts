@@ -19,7 +19,8 @@ program
   .command('run')
   .description('Run a workflow based on a goal')
   .argument('<goal>', 'The goal to achieve')
-  .action(async (goal: string) => {
+  .option('-r, --resume', 'Resume from a previously interrupted state')
+  .action(async (goal: string, options: { resume?: boolean }) => {
     try {
       if (!process.env.ANTHROPIC_API_KEY) {
         console.error("Error: ANTHROPIC_API_KEY is not set in the environment.");
@@ -33,7 +34,8 @@ program
       console.log('\n[INFO] Dashboard running at http://localhost:3000\n');
 
       const orchestrator = new Orchestrator();
-      const result = await orchestrator.executeWorkflow(goal);
+      const execOptions = options.resume ? { resume: true } : undefined;
+      const result = await orchestrator.executeWorkflow(goal, execOptions);
       
       console.log(`\n=== Final Synthesized Output ===`);
       console.log(result);

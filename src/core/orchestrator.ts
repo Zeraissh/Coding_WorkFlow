@@ -13,6 +13,7 @@ import { DEFAULT_DECOMPOSER_CONFIG } from './orchestrator/types';
 import { getProjectMemory } from './memory';
 import { gitCreateBranch, gitCommitAll } from '../tools/git_tool';
 import { ProjectIndexer } from './indexer';
+import { StateManager, WorkflowState } from './stateManager';
 
 export class Orchestrator {
   private decomposer: Decomposer;
@@ -153,22 +154,48 @@ Return ONLY valid JSON.`;
     }
   }
 
-  async executeWorkflow(goal: string): Promise<string> {
-    workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Planning Workflow...' });
-    const plan = await this.planWorkflow(goal);
+  async executeWorkflow(goal: string, options?: { resume?: boolean }): Promise<string> {
+    const stateManager = new StateManager();
+    let state = options?.resume ? stateManager.loadState() : null;
 
-    workflowEvents.emit('workflowStarted', { goal: plan.goal, totalTasks: plan.tasks.length });
+    let plan: Plan;
+    let results: TaskResult[] = [];
+    let agentLogs: AgentExecutionLog[] = [];
+    let startBatchIndex = 0;
 
-    // --- Git Branching ---
-    // 为当前任务创建一个独立分支
-    const safeGoal = plan.goal.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 20).replace(/-+$/, '');
-    const branchName = `autocode/task-${Date.now()}-${safeGoal}`;
-    workflowEvents.emit('log', { taskId: 'orchestrator', message: `Creating git branch: ${branchName}` });
-    await gitCreateBranch(branchName);
+    if (state && state.goal === goal) {
+      workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Resuming previous workflow state...' });
+      plan = state.plan;
+      results = state.results;
+      agentLogs = state.agentLogs;
+      startBatchIndex = state.currentBatchIndex;
+    } else {
+      workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Planning Workflow...' });
+      plan = await this.planWorkflow(goal);
 
-    if (plan.warnings && plan.warnings.length > 0) {
-      for (const warning of plan.warnings) {
-        workflowEvents.emit('log', { taskId: 'orchestrator', message: `⚠ ${warning}` });
+      state = {
+        goal,
+        plan,
+        results: [],
+        agentLogs: [],
+        status: 'executing',
+        currentBatchIndex: 0
+      };
+      stateManager.saveState(state);
+
+      workflowEvents.emit('workflowStarted', { goal: plan.goal, totalTasks: plan.tasks.length });
+
+      // --- Git Branching ---
+      // 为当前任务创建一个独立分支
+      const safeGoal = plan.goal.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 20).replace(/-+$/, '');
+      const branchName = `autocode/task-${Date.now()}-${safeGoal}`;
+      workflowEvents.emit('log', { taskId: 'orchestrator', message: `Creating git branch: ${branchName}` });
+      await gitCreateBranch(branchName);
+
+      if (plan.warnings && plan.warnings.length > 0) {
+        for (const warning of plan.warnings) {
+          workflowEvents.emit('log', { taskId: 'orchestrator', message: `⚠ ${warning}` });
+        }
       }
     }
 
@@ -183,13 +210,10 @@ Return ONLY valid JSON.`;
       budget.allocateForTasks(plan.tasks as any);
     }
 
-    const agentLogs: AgentExecutionLog[] = [];
-    const results: TaskResult[] = [];
-
     // --- 拓扑分批执行 ---
     const batches = plan.parallelBatches || [plan.tasks];
 
-    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    for (let batchIndex = startBatchIndex; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex]!;
       workflowEvents.emit('log', {
         taskId: 'orchestrator',
@@ -214,6 +238,12 @@ Return ONLY valid JSON.`;
 
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
+
+      // 保存状态
+      state!.results = results;
+      state!.agentLogs = agentLogs;
+      state!.currentBatchIndex = batchIndex + 1;
+      stateManager.saveState(state!);
 
       // 每批完成后做动态重分配
       for (const agent of batchAgents) {
@@ -240,6 +270,9 @@ Return ONLY valid JSON.`;
     await gitCommitAll(commitMsg);
 
     workflowEvents.emit('workflowCompleted', { result: finalOutput });
+    
+    // 清理状态
+    stateManager.clearState();
     return finalOutput;
   }
 }

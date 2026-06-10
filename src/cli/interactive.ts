@@ -3,6 +3,7 @@ import color from 'chalk';
 import { Orchestrator } from '../core/orchestrator';
 import { workflowEvents } from '../core/events';
 import { GlobalConfig } from '../core/config';
+import { StateManager } from '../core/stateManager';
 
 export async function runInteractiveCLI() {
   p.intro(color.bgCyan(color.black(' Dynamic Workflow CLI ')));
@@ -15,14 +16,36 @@ export async function runInteractiveCLI() {
   });
 
   while (true) {
-    const goal = await p.text({
-      message: 'Enter your goal (or type "exit" to quit):',
-      placeholder: 'Write a python script...',
-    });
+    const stateManager = new StateManager();
+    const savedState = stateManager.loadState();
+    let goal = '';
+    let resume = false;
 
-    if (p.isCancel(goal) || goal === 'exit' || !goal) {
-      p.outro('Goodbye!');
-      process.exit(0);
+    if (savedState && savedState.goal && savedState.status === 'executing') {
+      const shouldResume = await p.confirm({
+        message: `Found an interrupted workflow for goal: "${savedState.goal.substring(0, 50)}...". Resume it?`,
+        initialValue: true
+      });
+
+      if (shouldResume) {
+        goal = savedState.goal;
+        resume = true;
+      } else {
+        stateManager.clearState();
+      }
+    }
+
+    if (!resume) {
+      const inputGoal = await p.text({
+        message: 'Enter your goal (or type "exit" to quit):',
+        placeholder: 'Write a python script...',
+      });
+
+      if (p.isCancel(inputGoal) || inputGoal === 'exit' || !inputGoal) {
+        p.outro('Goodbye!');
+        process.exit(0);
+      }
+      goal = inputGoal as string;
     }
 
     const s = p.spinner();
@@ -59,7 +82,7 @@ export async function runInteractiveCLI() {
 
     try {
       const orchestrator = new Orchestrator();
-      const result = await orchestrator.executeWorkflow(goal as string);
+      const result = await orchestrator.executeWorkflow(goal as string, { resume });
       
       s.stop('Workflow completed!');
       p.note(result, 'Final Output');
