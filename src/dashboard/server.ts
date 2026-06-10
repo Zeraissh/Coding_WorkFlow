@@ -1,14 +1,18 @@
 import express from 'express';
 import * as path from 'path';
+import * as fs from 'fs';
 import { workflowEvents } from '../core/events';
+import { Evaluator } from '../core/evaluator';
 
 export class DashboardServer {
   private app: express.Application;
   private clients: express.Response[] = [];
   private history: any[] = [];
+  private evaluator: Evaluator;
 
   constructor() {
     this.app = express();
+    this.evaluator = new Evaluator();
     this.app.use(express.json());
     
     // Serve static files for Dashboard
@@ -48,6 +52,11 @@ export class DashboardServer {
       
       workflowEvents.emit('dashboardApproval', { taskId, approved });
       res.json({ success: true });
+    });
+
+    // Analytics Endpoint
+    this.app.get('/api/eval', (req, res) => {
+      res.json(this.evaluator.getLogs());
     });
 
     this.setupListeners();

@@ -198,8 +198,10 @@ async function askOpenAI(
 
   // --- Token 使用上报 ---
   const totalTokens = (response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0);
-  if (agentId && totalTokens > 0) {
-    tokenBudget().reportUsage(agentId, totalTokens);
+  const cachedTokens = (response.usage as any)?.prompt_tokens_details?.cached_tokens || 0;
+  if (totalTokens > 0) {
+    if (agentId) tokenBudget().reportUsage(agentId, totalTokens);
+    workflowEvents.emit('llmUsageReport', { tokens: totalTokens, cachedTokens, calls: 1 });
   }
 
   return {
@@ -278,8 +280,10 @@ async function askAnthropic(
 
   // --- Token 使用上报 ---
   const totalTokens = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
-  if (agentId && totalTokens > 0) {
-    tokenBudget().reportUsage(agentId, totalTokens);
+  const cachedTokens = (response.usage as any)?.cache_read_input_tokens || 0;
+  if (totalTokens > 0) {
+    if (agentId) tokenBudget().reportUsage(agentId, totalTokens);
+    workflowEvents.emit('llmUsageReport', { tokens: totalTokens, cachedTokens, calls: 1 });
   }
 
   return response;
