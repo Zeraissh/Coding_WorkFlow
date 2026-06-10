@@ -47,6 +47,10 @@ ${task.isolatedFiles ? `\nIsolated Files (you have exclusive write access): ${ta
 ${task.sharedFiles ? `\nShared Files (read-only for you): ${task.sharedFiles.join(', ')}` : ''}
 
 You have been provided with specific tools for this task. Use them if needed to gather information or perform actions.
+CRITICAL INSTRUCTION (SELF-CORRECTION):
+- You MUST verify your code by running tests, compiling, or executing it using the \`run_terminal_command\` tool.
+- If you encounter errors, you MUST iteratively fix the code and re-test it.
+- You are allowed a maximum of 3 failed attempts to fix errors before you must give up and return the best partial result.
 Please provide the best possible output for this sub-task.`;
 
     const projectMemory = getProjectMemory();
@@ -57,6 +61,9 @@ Please provide the best possible output for this sub-task.`;
     const activeMcpClients: MCPClientWrapper[] = [];
     const anthropicTools: Tool[] = [];
     const toolExecutors = new Map<string, (args: any) => Promise<string>>();
+
+    let toolCallCount = 0;
+    const MAX_TOOL_CALLS = 15;
 
     try {
       // 1. Always inject built-in tools (read_file, write_file, run_terminal_command, etc.)
@@ -124,6 +131,11 @@ Please provide the best possible output for this sub-task.`;
         [{ role: 'user', content: "Execute the sub-task." }],
         anthropicTools,
         async (name, input) => {
+          toolCallCount++;
+          if (toolCallCount > MAX_TOOL_CALLS) {
+            return `System Error: Maximum tool call limit (${MAX_TOOL_CALLS}) reached. You must stop calling tools and provide your final response immediately.`;
+          }
+          
           const executor = toolExecutors.get(name);
           if (executor) {
             return await executor(input);
