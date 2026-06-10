@@ -58,6 +58,10 @@
       <h2>Code Review Required</h2>
       <p>The workflow has completed generating the code. Please review the changes before committing.</p>
       <div class="diff-box" id="diff-content"></div>
+      <div style="margin-top: 15px;">
+        <label for="feedback-input" style="font-weight: bold; font-size: 0.9rem;">Feedback / Rejection Reason (Optional):</label>
+        <textarea id="feedback-input" rows="3" style="width: 100%; margin-top: 5px; padding: 8px; border: 1px solid #d4d4d8; border-radius: 4px; box-sizing: border-box;" placeholder="e.g. Please do not use 'var', use 'const' instead."></textarea>
+      </div>
       <div class="btn-group">
         <button class="btn btn-reject" onclick="submitReview(false)">Reject</button>
         <button class="btn btn-approve" onclick="submitReview(true)">Accept & Commit</button>
@@ -96,12 +100,14 @@
     let currentReviewTaskId = null;
     function submitReview(approved) {
       if (!currentReviewTaskId) return;
+      const feedback = document.getElementById('feedback-input').value;
       fetch('/api/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: currentReviewTaskId, approved })
+        body: JSON.stringify({ taskId: currentReviewTaskId, approved, feedback })
       }).then(() => {
         document.getElementById('review-modal').classList.remove('active');
+        document.getElementById('feedback-input').value = '';
         appendLog(`[Dashboard] You have ${approved ? 'approved' : 'rejected'} the changes.`, 'info');
       });
     }

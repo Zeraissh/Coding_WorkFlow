@@ -35,13 +35,39 @@ export class DashboardServer {
     });
 
     // Handle Human-in-the-Loop Dashboard Approvals
-    this.app.post('/api/approve', (req, res) => {
-      const { taskId, approved } = req.body;
+    this.app.post('/api/approve', async (req, res) => {
+      const { taskId, approved, feedback } = req.body;
+      
+      if (!approved && feedback) {
+        // Run rule extraction in the background so we don't block the UI
+        this.extractAndSaveRule(feedback).catch(console.error);
+      }
+      
       workflowEvents.emit('dashboardApproval', { taskId, approved });
       res.json({ success: true });
     });
 
     this.setupListeners();
+  }
+
+  private async extractAndSaveRule(feedback: string) {
+    try {
+      workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Extracting project rule from feedback...' });
+      const { askLLM } = await import('../llm/client');
+      const { appendProjectMemory } = await import('../core/memory');
+      
+      const prompt = `You are a rule extraction expert. The user rejected a code change with the following feedback:\n"${feedback}"\n\nPlease extract a concise, generalized software engineering or styling rule from this feedback that should be followed in the future. Return ONLY the rule text, nothing else.`;
+      const response = await askLLM(prompt, [{ role: 'user', content: prompt }]);
+      const textBlock = response.content.find(block => block.type === 'text') as any;
+      if (textBlock && textBlock.text) {
+        let rule = textBlock.text.trim();
+        rule = rule.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').trim();
+        appendProjectMemory(rule);
+        workflowEvents.emit('log', { taskId: 'orchestrator', message: `Saved new project rule: ${rule}` });
+      }
+    } catch (err) {
+      console.error('Failed to extract rule:', err);
+    }
   }
 
   private broadcast(type: string, payload: any) {
