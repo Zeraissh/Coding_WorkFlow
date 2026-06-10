@@ -23,15 +23,32 @@ program
   .action(async (goal: string, options: { resume?: boolean }) => {
     try {
       let config = GlobalConfig.get();
+
+      // Fallback to env var if file config is empty
       if (!config.apiKey && process.env.ANTHROPIC_API_KEY && config.provider === 'anthropic') {
         GlobalConfig.update({ apiKey: process.env.ANTHROPIC_API_KEY });
         config = GlobalConfig.get();
       }
 
+      // Fallback: try env vars for other providers too
       if (!config.apiKey) {
-        console.error("\nError: No API Key configured.");
-        console.error("Please run 'autocode config' to set up your LLM provider and API key.");
-        process.exit(1);
+        if (process.env.OPENAI_API_KEY && (config.provider === 'openai' || !config.provider)) {
+          GlobalConfig.update({ apiKey: process.env.OPENAI_API_KEY, provider: 'openai' });
+          config = GlobalConfig.get();
+        } else if (process.env.DEEPSEEK_API_KEY && (config.provider === 'deepseek' || !config.provider)) {
+          GlobalConfig.update({ apiKey: process.env.DEEPSEEK_API_KEY, provider: 'deepseek' });
+          config = GlobalConfig.get();
+        }
+      }
+
+      if (!config.apiKey) {
+        console.log("No API Key configured. Redirecting to configuration setup...\n");
+        await runConfigCLI();
+        config = GlobalConfig.get();
+        if (!config.apiKey) {
+          console.error("Configuration aborted. Exiting.");
+          process.exit(1);
+        }
       }
 
       console.log(`Starting Dynamic Workflow for goal: "${goal}"`);
