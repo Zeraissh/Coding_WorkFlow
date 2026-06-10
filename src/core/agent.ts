@@ -38,9 +38,15 @@ export class SubAgent {
   async execute(task: SubTask, globalContext: string, toolRecords: ToolRecord[]): Promise<TaskResult> {
     this.executionLog.subtaskId = task.id;
 
+    const osInfo = process.platform === 'win32' ? 'Windows (use PowerShell)' : process.platform;
     const systemPrompt = `You are an expert sub-agent.
 Your goal is to execute a specific sub-task as part of a larger workflow.
 Global Context: ${globalContext}
+
+OS Environment: ${osInfo}.
+CRITICAL OS RULES:
+- Use appropriate terminal commands for the OS.
+- Do NOT output massive amounts of text (e.g. avoid 'tree /f' or 'ls -R' in root). Use the 'list_dir' tool instead.
 
 Sub-Task ID: ${task.id}
 Description: ${task.description}
@@ -65,7 +71,7 @@ Please provide the best possible output for this sub-task.`;
     const toolExecutors = new Map<string, (args: any) => Promise<string>>();
 
     let toolCallCount = 0;
-    const MAX_TOOL_CALLS = 15;
+    const MAX_TOOL_CALLS = 25;
 
     try {
       // 1. Always inject built-in tools (read_file, write_file, run_terminal_command, etc.)

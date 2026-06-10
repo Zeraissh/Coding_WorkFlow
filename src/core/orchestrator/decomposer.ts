@@ -82,18 +82,28 @@ export class Decomposer {
       ? detectCategory(userInput)
       : this.config.fewShotCategory;
 
-    // Step 2: LLM 拆解
-    const prompt = buildDecompositionPrompt(userInput, category, this.config, projectMemory);
-    const rawResponse = await this.llm.callLLM(prompt, {
-      temperature: 0.3,
-      maxTokens: 4000,
-    });
+    // Step 2: LLM 拆解 (with 1 retry)
+    let subtasks: Subtask[] = [];
+    let prompt = buildDecompositionPrompt(userInput, category, this.config, projectMemory);
+    
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const rawResponse = await this.llm.callLLM(prompt, {
+        temperature: 0.3,
+        maxTokens: 4000,
+      });
 
-    let subtasks = this.parseSubtasks(rawResponse);
+      subtasks = this.parseSubtasks(rawResponse);
+      if (subtasks.length > 0) {
+        break; // 成功解析
+      }
+      // 失败则添加错误提示重新试
+      prompt += `\n\nERROR: The previous response was not a valid JSON array of Subtasks. Please ensure your response is strictly a JSON array of objects fitting the schema, enclosed in \`\`\`json blocks. Do not return empty.`;
+      warnings.push(`LLM 拆解 JSON 解析失败，正在进行第 ${attempt} 次重试...`);
+    }
+
     if (subtasks.length === 0) {
-      // 解析失败 → 创建单个回退任务
-      warnings.push('LLM 拆解返回空结果，使用单任务回退');
-      subtasks = [this.createFallbackTask(userInput)];
+      warnings.push('LLM 拆解彻底失败，使用分析与执行双任务兜底模板');
+      subtasks = this.createFallbackTasks(userInput);
     }
 
     // 限制数量
@@ -340,16 +350,27 @@ export class Decomposer {
     return true;
   }
 
-  private createFallbackTask(userInput: string): Subtask {
-    return {
-      id: 'fallback-1',
-      description: userInput,
-      estimatedComplexity: 8,
-      dependencies: [],
-      isolatedFiles: [],
-      sharedFiles: [],
-      expectedOutput: '完成用户任务',
-    };
+  private createFallbackTasks(userInput: string): Subtask[] {
+    return [
+      {
+        id: 'fallback-analyze-1',
+        description: `Analyze the user request: ${userInput}`,
+        estimatedComplexity: 3,
+        dependencies: [],
+        isolatedFiles: [],
+        sharedFiles: [],
+        expectedOutput: 'An analysis report outlining the specific code changes needed.',
+      },
+      {
+        id: 'fallback-execute-2',
+        description: `Execute the changes based on the analysis for: ${userInput}`,
+        estimatedComplexity: 7,
+        dependencies: ['fallback-analyze-1'],
+        isolatedFiles: [],
+        sharedFiles: [],
+        expectedOutput: 'The final code changes implemented and verified.',
+      }
+    ];
   }
 
   private clamp(value: number, min: number, max: number): number {

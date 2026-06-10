@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import { search } from 'duck-duck-scrape';
+import * as path from 'path';
 import { fslock } from '../core/fslock';
 import { workflowEvents } from '../core/events';
 
@@ -52,8 +53,38 @@ export const builtinTools = [
       },
       required: ['query']
     }
+  },
+  {
+    name: 'list_dir',
+    description: 'Safely list directory contents up to a specified depth, ignoring node_modules and hidden folders. Useful to understand project structure without stdout explosion.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        dirPath: { type: 'string', description: 'Directory path to list, use . for current directory' },
+        depth: { type: 'number', description: 'Max depth to recurse, default 2' }
+      },
+      required: ['dirPath']
+    }
   }
 ];
+
+// Helper to recursively list files safely
+function safeListDir(dir: string, maxDepth: number, currentDepth = 1): string[] {
+  if (currentDepth > maxDepth) return [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.') || entry.name === 'dist') continue;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(`[DIR] ${fullPath}`);
+      results.push(...safeListDir(fullPath, maxDepth, currentDepth + 1));
+    } else {
+      results.push(`[FILE] ${fullPath}`);
+    }
+  }
+  return results;
+}
 
 export async function executeBuiltinTool(name: string, args: any, agentId?: string): Promise<string> {
   try {
@@ -94,6 +125,15 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
       case 'search_web':
         const searchResults = await search(args.query);
         return JSON.stringify(searchResults.results.slice(0, 5), null, 2);
+      case 'list_dir':
+        try {
+          const depth = args.depth || 2;
+          const targetDir = path.resolve(args.dirPath);
+          const lines = safeListDir(targetDir, depth);
+          return lines.length > 0 ? lines.join('\n') : 'Directory is empty or all contents were ignored.';
+        } catch (e: any) {
+          return `Failed to list directory: ${e.message}`;
+        }
       default:
         throw new Error(`Unknown builtin tool: ${name}`);
     }

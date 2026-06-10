@@ -78,12 +78,36 @@ export class Evaluator {
           totalDurationMs: Date.now() - this.currentStats.startTime
         });
         this.saveLogs();
-        workflowEvents.emit('evalUpdated', this.records);
+        workflowEvents.emit('evalUpdated', this.getLogs());
       }
     });
   }
 
+  public calculateRetentionScore(): number {
+    if (this.records.length === 0) return 0;
+    
+    let totalTokens = 0, cachedTokens = 0;
+    let totalTasks = 0, successTasks = 0;
+    
+    for (const r of this.records) {
+      totalTokens += r.totalTokens;
+      cachedTokens += r.cachedTokens;
+      totalTasks += r.totalTasks;
+      successTasks += r.successfulTasks;
+    }
+    
+    const cacheHitRate = totalTokens > 0 ? (cachedTokens / totalTokens) : 0;
+    const successRate = totalTasks > 0 ? (successTasks / totalTasks) : 0;
+
+    // Custom formula: (CacheHitRate * 0.6) + (TaskSuccessRate * 0.4)
+    const score = (cacheHitRate * 0.6) + (successRate * 0.4);
+    return Math.round(score * 100);
+  }
+
   public getLogs() {
-    return this.records;
+    return {
+      records: this.records,
+      retentionScore: this.calculateRetentionScore()
+    };
   }
 }

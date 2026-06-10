@@ -106,9 +106,16 @@
       <p id="goal-text" style="color: var(--text-muted);">Waiting for workflow to start...</p>
     </div>
     
-    <div class="live-ticker" id="token-ticker">
-      <div class="label">Session Tokens</div>
-      <div class="value" id="token-value">0</div>
+    <div style="display: flex; gap: 15px;">
+      <div class="live-ticker" id="retention-ticker" style="background: #3f3f46;">
+        <div class="label">Retention Score</div>
+        <div class="value" id="retention-value" style="color: #38bdf8;">--</div>
+      </div>
+      
+      <div class="live-ticker" id="token-ticker">
+        <div class="label">Session Tokens</div>
+        <div class="value" id="token-value">0</div>
+      </div>
     </div>
   </div>
   
@@ -172,6 +179,7 @@
     const logFilter = document.getElementById('log-filter');
     const tokenValueEl = document.getElementById('token-value');
     const tokenTickerEl = document.getElementById('token-ticker');
+    const retentionValueEl = document.getElementById('retention-value');
     
     let currentSessionTokens = 0;
     let displayTokens = 0;
@@ -355,6 +363,20 @@
       }
       else if (type === 'workflowCompleted') {
         appendLog('orchestrator', `Workflow Completed!`, 'success');
+        // Fetch eval manually if evalUpdated didn't arrive
+        fetch('/api/eval')
+          .then(res => res.json())
+          .then(data => {
+            if (data.retentionScore !== undefined) {
+              retentionValueEl.innerText = data.retentionScore + '/100';
+            }
+          })
+          .catch(() => {});
+      }
+      else if (type === 'evalUpdated') {
+        if (payload && payload.retentionScore !== undefined) {
+          retentionValueEl.innerText = payload.retentionScore + '/100';
+        }
       }
       else if (type === 'previewUpdated') {
         const iframe = document.getElementById('preview-iframe');
