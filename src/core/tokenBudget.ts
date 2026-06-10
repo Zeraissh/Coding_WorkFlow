@@ -139,6 +139,7 @@ export class TokenBudgetManager {
   private agentTaskMap: Map<string, string> = new Map(); // agentId → subtaskId
   private listeners: BudgetEventListener[] = [];
   private agentCallCounts: Map<string, number> = new Map();
+  private agentFallbackSpent: Map<string, number> = new Map();
 
   private constructor() {}
 
@@ -162,6 +163,7 @@ export class TokenBudgetManager {
     this.agentTaskMap.clear();
     this.listeners = [];
     this.agentCallCounts.clear();
+    this.agentFallbackSpent.clear();
   }
 
   onBudgetEvent(listener: BudgetEventListener): void {
@@ -249,6 +251,8 @@ export class TokenBudgetManager {
    * Agent 每次 LLM 调用后上报 Token 消耗
    */
   reportUsage(agentId: string, tokensUsed: number): void {
+    this.agentFallbackSpent.set(agentId, (this.agentFallbackSpent.get(agentId) || 0) + tokensUsed);
+    
     if (!this.config.enabled || !this.budget) return;
 
     const subtaskId = this.agentTaskMap.get(agentId);
@@ -272,8 +276,7 @@ export class TokenBudgetManager {
   }
 
   getUsage(agentId: string): number {
-    if (!this.budget) return 0;
-    return this.budget.agentSpent.get(agentId) || 0;
+    return this.agentFallbackSpent.get(agentId) || 0;
   }
 
   /**

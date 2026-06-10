@@ -98,6 +98,9 @@ export class DashboardServer {
     workflowEvents.on('workflowCompleted', (data) => this.broadcast('workflowCompleted', data));
     workflowEvents.on('log', (data) => this.broadcast('log', data));
     workflowEvents.on('previewUpdated', (data) => this.broadcast('previewUpdated', data));
+    workflowEvents.on('llmUsageReport', (data) => this.broadcast('llmUsageReport', data));
+    workflowEvents.on('fileChanged', (data) => this.broadcast('fileChanged', data));
+    workflowEvents.on('reviewRequested', (data) => this.broadcast('reviewRequested', data));
   }
 
   public start(port: number = 3000) {

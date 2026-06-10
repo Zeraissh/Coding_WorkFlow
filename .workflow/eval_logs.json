@@ -8,5 +8,15 @@
     "cachedTokens": 27392,
     "totalLlmCalls": 4,
     "totalDurationMs": 394201
+  },
+  {
+    "timestamp": 1781063187111,
+    "workflowId": "wf_1781062954975",
+    "totalTasks": 1,
+    "successfulTasks": 1,
+    "totalTokens": 420961,
+    "cachedTokens": 407808,
+    "totalLlmCalls": 2,
+    "totalDurationMs": 232136
   }
 ]
