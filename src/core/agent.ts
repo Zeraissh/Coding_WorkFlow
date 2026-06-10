@@ -8,6 +8,7 @@ import { fslock } from './fslock';
 import { tokenBudget } from './tokenBudget';
 import { getProjectMemory } from './memory';
 import { MCPRegistry } from '../mcp/registry';
+import { workflowEvents } from './events';
 
 export class SubAgent {
   private agentId: string;
@@ -146,9 +147,13 @@ Please provide the best possible output for this sub-task.`;
             return `System Error: Maximum tool call limit (${MAX_TOOL_CALLS}) reached. You must stop calling tools and provide your final response immediately.`;
           }
           
+          if (task.id) workflowEvents.emit('log', { taskId: task.id, message: `[${this.agentId}] [Tool Call] ${name}` });
+
           const executor = toolExecutors.get(name);
           if (executor) {
-            return await executor(input);
+            const result = await executor(input);
+            if (task.id) workflowEvents.emit('log', { taskId: task.id, message: `[${this.agentId}] [Tool Result] ${result.slice(0, 100)}...` });
+            return result;
           }
           throw new Error(`Tool ${name} not found`);
         },
@@ -164,18 +169,25 @@ Please provide the best possible output for this sub-task.`;
         throw new Error("Failed to get text response from LLM");
       }
 
+      this.executionLog.tokensUsed = tokenBudget().getUsage(this.agentId);
+
       return {
         taskId: task.id,
         result: contentText.text,
-        success: true
+        success: true,
+        agentId: this.agentId,
+        executionLog: this.getExecutionLog()
       };
     } catch (err: any) {
       this.executionLog.errors.push(err.message || String(err));
+      this.executionLog.tokensUsed = tokenBudget().getUsage(this.agentId);
       return {
         taskId: task.id,
         result: "",
         success: false,
-        error: err.message || String(err)
+        error: err.message || String(err),
+        agentId: this.agentId,
+        executionLog: this.getExecutionLog()
       };
     } finally {
       // 释放该 Agent 持有的所有文件锁

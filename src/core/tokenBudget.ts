@@ -271,6 +271,11 @@ export class TokenBudgetManager {
     this.agentCallCounts.set(agentId, (this.agentCallCounts.get(agentId) || 0) + 1);
   }
 
+  getUsage(agentId: string): number {
+    if (!this.budget) return 0;
+    return this.budget.agentSpent.get(agentId) || 0;
+  }
+
   /**
    * 检查 Agent 是否可以继续执行
    *

@@ -26,6 +26,8 @@ export interface TaskResult {
   result: string;
   success: boolean;
   error?: string;
+  agentId?: string;
+  executionLog?: AgentExecutionLog;
 }
 
 // ============================================================================

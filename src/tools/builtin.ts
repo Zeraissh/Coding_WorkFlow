@@ -68,6 +68,7 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
         return content;
       }
       case 'write_file': {
+        const fileExists = fs.existsSync(args.path);
         if (agentId) {
           await fslock().acquireWrite(args.path, agentId);
           try {
@@ -79,6 +80,11 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
           fs.writeFileSync(args.path, args.content, 'utf-8');
         }
         
+        workflowEvents.emit('fileChanged', { 
+          type: fileExists ? 'Modified' : 'Added', 
+          path: args.path 
+        });
+
         if (args.path.endsWith('.html') || args.path.endsWith('.css') || args.path.endsWith('.js')) {
           workflowEvents.emit('previewUpdated', { path: args.path });
         }

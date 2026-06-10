@@ -241,7 +241,13 @@ Return ONLY valid JSON.`;
 
         const result = await agent.execute(task, plan.goal, tools);
         agentLogs.push(agent.getExecutionLog());
-        workflowEvents.emit('taskCompleted', { taskId: task.id, result: result.result, success: result.success });
+        workflowEvents.emit('taskCompleted', { 
+          taskId: task.id, 
+          result: result.result, 
+          success: result.success,
+          agentId: result.agentId,
+          executionLog: result.executionLog
+        });
         return result;
       });
 
@@ -287,7 +293,7 @@ Return ONLY valid JSON.`;
           }
         };
         workflowEvents.on('dashboardApproval', handler);
-        workflowEvents.emit('reviewRequested', { taskId: 'orchestrator', diff: diffText });
+        workflowEvents.emit('reviewRequested', { taskId: 'orchestrator', diff: diffText, finalOutput });
       });
 
       if (!approved) {

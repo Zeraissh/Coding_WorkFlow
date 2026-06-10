@@ -152,7 +152,8 @@ async function askOpenAI(
       const c = call as any;
       try {
         const inputArgs = JSON.parse(c.function.arguments);
-        if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Call] ${c.function.name}` });
+        const logPrefix = agentId ? `[${agentId}] ` : '';
+        if (taskId) workflowEvents.emit('log', { taskId, message: `${logPrefix}[Tool Call] ${c.function.name}` });
 
         if (config.requireApproval && c.function.name === 'run_terminal_command') {
           await new Promise<void>((resolve, reject) => {
@@ -167,11 +168,13 @@ async function askOpenAI(
         }
 
         const result = await onToolCall(c.function.name, inputArgs);
-        if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Result] ${result.slice(0, 100)}...` });
+        const resultPrefix = agentId ? `[${agentId}] ` : '';
+        if (taskId) workflowEvents.emit('log', { taskId, message: `${resultPrefix}[Tool Result] ${result.slice(0, 100)}...` });
 
         toolResults.push({ type: 'tool_result', tool_use_id: c.id, content: result });
       } catch (err: any) {
-        if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Error] ${err.message}` });
+        const errPrefix = agentId ? `[${agentId}] ` : '';
+        if (taskId) workflowEvents.emit('log', { taskId, message: `${errPrefix}[Tool Error] ${err.message}` });
         toolResults.push({ type: 'tool_result', tool_use_id: call.id, content: `Error: ${err.message}`, is_error: true });
       }
     }
@@ -245,7 +248,8 @@ async function askAnthropic(
     for (const block of response.content) {
       if (block.type === 'tool_use') {
         try {
-          if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Call] ${block.name}` });
+          const callPrefix = agentId ? `[${agentId}] ` : '';
+          if (taskId) workflowEvents.emit('log', { taskId, message: `${callPrefix}[Tool Call] ${block.name}` });
 
           if (config.requireApproval && block.name === 'run_terminal_command') {
             await new Promise<void>((resolve, reject) => {
@@ -260,10 +264,12 @@ async function askAnthropic(
           }
 
           const result = await onToolCall(block.name, block.input);
-          if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Result] ${result.slice(0, 100)}...` });
+          const resultPrefix2 = agentId ? `[${agentId}] ` : '';
+          if (taskId) workflowEvents.emit('log', { taskId, message: `${resultPrefix2}[Tool Result] ${result.slice(0, 100)}...` });
           toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
         } catch (err: any) {
-          if (taskId) workflowEvents.emit('log', { taskId, message: `[Tool Error] ${err.message}` });
+          const errPrefix2 = agentId ? `[${agentId}] ` : '';
+          if (taskId) workflowEvents.emit('log', { taskId, message: `${errPrefix2}[Tool Error] ${err.message}` });
           toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: `Error: ${err.message}`, is_error: true });
         }
       }
