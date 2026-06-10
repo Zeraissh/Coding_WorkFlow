@@ -34,6 +34,17 @@
 
 ---
 
+## 🏭 工业级并发与资源控制引擎
+
+在多 Agent 并发操作的底层，系统搭载了四大核心机制保驾护航：
+
+1. **🔒 基于微任务的文件锁 (`FSLock`)**：独创的 Promise 异步队列排队机制。彻底杜绝多个 Agent 并行写入同一文件导致的竞态覆写与代码损坏，并内置超时死锁熔断保护，支持安全的锁重入。
+2. **💰 动态 Token 预算管家 (`Token Budget`)**：彻底告别 API 账单暴雷！Orchestrator 根据任务复杂度（权重）自动给每个 Agent 分配初始 Token 预算。带有 70%(提醒)/85%(截断)/95%(强制终止) 三级熔断预警。当有 Agent 提前完工时，其未消耗的 Token 盈余会**按剩余比例动态重分配**给其他存活的 Agent，将 API 资金利用率推向极致。
+3. **🧠 智能拓扑分解 (`Smart Decomposer`)**：Orchestrator 不仅能拆解子任务，还能精准评估每个任务的 `estimatedComplexity`（估算复杂度），并自动分析子任务间的串并行逻辑依赖 (`dependencies`)。
+4. **🕵️ 双轨制二阶验证 (`Two-phase Verifier`)**：所有 Agent 在工作时会自动打点留下精细的行动日志（`AgentExecutionLog`，涵盖修改了哪些代码、执行了哪些 Shell）。在收尾阶段，Verifier 将运用基于规则的 `AutoChecker`（验证测试、语法）与大模型驱动的 `SemanticReviewer`（验证业务语义）进行地毯式验收！
+
+---
+
 ## 🛠 安装与配置
 
 ### 1. 克隆并安装依赖

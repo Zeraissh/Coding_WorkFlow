@@ -79,7 +79,7 @@ export class Evaluator {
           ? Math.round((this.currentStats.cachedTokens / Math.max(totalInputTokens, 1)) * 100)
           : 0;
 
-        // 估算节省成本: Anthropic $3/M input tokens, cached $0.30/M → 节省 $2.70/M cached tokens
+        // Estimate cost savings: Anthropic $3/M input tokens, cached $0.30/M -> savings $2.70/M cached tokens
         const savingsPerMillion = 2.70;
         const estimatedSavings = (this.currentStats.cachedTokens / 1_000_000) * savingsPerMillion;
 

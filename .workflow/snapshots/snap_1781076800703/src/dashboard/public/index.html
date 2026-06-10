@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoCode Workflow Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 20px; color: #3f3f46; }
+    h1 { font-size: 1.5rem; color: #18181b; }
+    .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 300px 1fr 400px; gap: 20px; }
+    .panel { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+    .panel.analytics { grid-column: span 3; }
+    .panel h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid #e4e4e7; padding-bottom: 10px; flex-shrink: 0; }
+    .log-box { flex-grow: 1; overflow-y: auto; background: #18181b; color: #a1a1aa; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; min-height: 400px; }
+    .analytics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px; }
+    .metric-card { background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; text-align: center; }
+    .metric-value { font-size: 1.8rem; font-weight: bold; color: #3b82f6; margin-top: 5px; }
+    .metric-label { font-size: 0.85rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .log-entry { margin-bottom: 4px; }
+    .log-entry.info { color: #3b82f6; }
+    .log-entry.warn { color: #f59e0b; }
+    .log-entry.success { color: #10b981; }
+    .task-list { list-style: none; padding: 0; margin: 0; }
+    .task-item { padding: 10px; border: 1px solid #e4e4e7; border-radius: 6px; margin-bottom: 10px; }
+    .task-item.pending { border-left: 4px solid #d4d4d8; }
+    .task-item.running { border-left: 4px solid #3b82f6; background-color: #eff6ff; }
+    .task-item.completed { border-left: 4px solid #10b981; }
+    .task-id { font-weight: bold; font-size: 0.85rem; color: #71717a; }
+    
+    .preview-box { flex-grow: 1; border: 1px solid #e4e4e7; border-radius: 6px; overflow: hidden; background: #fff; min-height: 400px; }
+    .preview-iframe { width: 100%; height: 100%; border: none; }
+    
+    /* Modal styles */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: white; width: 80%; max-width: 800px; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .modal h2 { margin-top: 0; }
+    .diff-box { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; overflow-x: auto; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+    .btn-group { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .btn-approve { background: #10b981; color: white; }
+    .btn-reject { background: #ef4444; color: white; }
+  </style>
+</head>
+<body>
+  <div style="max-width: 1400px; margin: 0 auto 20px auto;">
+    <h1>AutoCode Workflow Dashboard</h1>
+    <p id="goal-text">Waiting for workflow to start...</p>
+  </div>
+  
+  <div class="container">
+    <div class="panel analytics">
+      <h2>Agent Analytics & ROI</h2>
+      <div class="analytics-grid">
+        <div class="metric-card"><div class="metric-label">Total Workflows</div><div class="metric-value" id="stat-wf">0</div></div>
+        <div class="metric-card"><div class="metric-label">Avg Task Success</div><div class="metric-value" id="stat-success">0%</div></div>
+        <div class="metric-card"><div class="metric-label">Token Cache Hit Rate</div><div class="metric-value" id="stat-cache">0%</div></div>
+        <div class="metric-card"><div class="metric-label">Total LLM Calls</div><div class="metric-value" id="stat-calls">0</div></div>
+      </div>
+    </div>
+    
+    <div class="panel">
+      <h2>Tasks</h2>
+      <ul class="task-list" id="task-list">
+        <!-- Tasks will be injected here -->
+      </ul>
+    </div>
+    <div class="panel">
+      <h2>Live Preview</h2>
+      <div class="preview-box">
+        <iframe id="preview-iframe" class="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Logs</h2>
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="review-modal">
+    <div class="modal">
+      <h2>Code Review Required</h2>
+      <p>The workflow has completed generating the code. Please review the changes before committing.</p>
+      <div class="diff-box" id="diff-content"></div>
+      <div style="margin-top: 15px;">
+        <label for="feedback-input" style="font-weight: bold; font-size: 0.9rem;">Feedback / Rejection Reason (Optional):</label>
+        <textarea id="feedback-input" rows="3" style="width: 100%; margin-top: 5px; padding: 8px; border: 1px solid #d4d4d8; border-radius: 4px; box-sizing: border-box;" placeholder="e.g. Please do not use 'var', use 'const' instead."></textarea>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-reject" onclick="submitReview(false)">Reject</button>
+        <button class="btn btn-approve" onclick="submitReview(true)">Accept & Commit</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const logBox = document.getElementById('log-box');
+    const taskList = document.getElementById('task-list');
+    const goalText = document.getElementById('goal-text');
+
+    const tasks = new Map();
+
+    function appendLog(message, type = 'default') {
+      const div = document.createElement('div');
+      div.className = `log-entry ${type}`;
+      div.innerText = message;
+      logBox.appendChild(div);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function renderTasks() {
+      taskList.innerHTML = '';
+      for (const [id, task] of tasks.entries()) {
+        const li = document.createElement('li');
+        li.className = `task-item ${task.status}`;
+        li.innerHTML = `
+          <div class="task-id">${id} (${task.status.toUpperCase()})</div>
+          <div>${task.description}</div>
+        `;
+        taskList.appendChild(li);
+      }
+    }
+
+    let currentReviewTaskId = null;
+    function submitReview(approved) {
+      if (!currentReviewTaskId) return;
+      const feedback = document.getElementById('feedback-input').value;
+      fetch('/api/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: currentReviewTaskId, approved, feedback })
+      }).then(() => {
+        document.getElementById('review-modal').classList.remove('active');
+        document.getElementById('feedback-input').value = '';
+        appendLog(`[Dashboard] You have ${approved ? 'approved' : 'rejected'} the changes.`, 'info');
+      });
+    }
+
+    const evtSource = new EventSource('/events');
+    
+    evtSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const { type, payload, timestamp } = data;
+      const timeStr = new Date(timestamp).toLocaleTimeString();
+
+      if (type === 'workflowStarted') {
+        goalText.innerHTML = `<strong>Goal:</strong> ${payload.goal} <br><small>Total Tasks: ${payload.totalTasks}</small>`;
+        appendLog(`[${timeStr}] Workflow started`, 'info');
+      } 
+      else if (type === 'taskStarted') {
+        tasks.set(payload.taskId, { description: payload.description, status: 'running' });
+        renderTasks();
+        appendLog(`[${timeStr}] Task Started: ${payload.taskId}`, 'info');
+      }
+      else if (type === 'taskCompleted') {
+        if (tasks.has(payload.taskId)) {
+          tasks.get(payload.taskId).status = 'completed';
+          renderTasks();
+        }
+        appendLog(`[${timeStr}] Task Completed: ${payload.taskId} (Success: ${payload.success})`, payload.success ? 'success' : 'warn');
+      }
+      else if (type === 'reviewRequested') {
+        currentReviewTaskId = payload.taskId;
+        document.getElementById('diff-content').innerText = payload.diff;
+        document.getElementById('review-modal').classList.add('active');
+        appendLog(`[${timeStr}] Review requested. Please check the popup window.`, 'warn');
+      }
+      else if (type === 'workflowCompleted') {
+        appendLog(`[${timeStr}] Workflow Completed!`, 'success');
+      }
+      else if (type === 'previewUpdated') {
+        const iframe = document.getElementById('preview-iframe');
+        // Convert local absolute path to workspace relative path if possible
+        let srcPath = payload.path;
+        if (srcPath.startsWith('/')) {
+           srcPath = srcPath.split('/').pop();
+        } else if (srcPath.includes('\\')) {
+           srcPath = srcPath.split('\\').pop();
+        }
+        
+        // Ensure it has .html
+        if (srcPath.endsWith('.html')) {
+          iframe.src = '/workspace/' + srcPath + '?t=' + Date.now();
+        } else if (iframe.src) {
+          // If it's css or js, just reload the current iframe
+          iframe.src = iframe.src.split('?')[0] + '?t=' + Date.now();
+        }
+      }
+      else if (type === 'evalUpdated') {
+        renderAnalytics(payload);
+      }
+      else if (type === 'log') {
+        let msgType = 'default';
+        if (payload.message.includes('⚠') || payload.message.toLowerCase().includes('fail')) msgType = 'warn';
+        else if (payload.message.toLowerCase().includes('success')) msgType = 'success';
+        
+        appendLog(`[${timeStr}] [${payload.taskId}] ${payload.message}`, msgType);
+      }
+    };
+
+    function renderAnalytics(logs) {
+      if (!logs || logs.length === 0) return;
+      document.getElementById('stat-wf').innerText = logs.length;
+      
+      let totalTasks = 0, successTasks = 0, totalTokens = 0, cachedTokens = 0, totalCalls = 0;
+      for (const log of logs) {
+        totalTasks += log.totalTasks;
+        successTasks += log.successfulTasks;
+        totalTokens += log.totalTokens;
+        cachedTokens += log.cachedTokens;
+        totalCalls += log.totalLlmCalls;
+      }
+      
+      const successRate = totalTasks > 0 ? Math.round((successTasks / totalTasks) * 100) : 0;
+      const cacheRate = totalTokens > 0 ? Math.round((cachedTokens / totalTokens) * 100) : 0;
+      
+      document.getElementById('stat-success').innerText = successRate + '%';
+      document.getElementById('stat-cache').innerText = cacheRate + '%';
+      document.getElementById('stat-calls').innerText = totalCalls;
+    }
+
+    // Load initial analytics
+    fetch('/api/eval').then(r => r.json()).then(renderAnalytics).catch(console.error);
+  </script>
+</body>
+</html>
