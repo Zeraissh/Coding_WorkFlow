@@ -72,6 +72,10 @@ program
       }
     }
     
+    const dashboard = new DashboardServer();
+    dashboard.start(3000);
+    console.log('\n[INFO] Dashboard running at http://localhost:3000\n');
+
     await runInteractiveCLI();
   });
 
