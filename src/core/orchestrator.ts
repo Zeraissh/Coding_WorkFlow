@@ -10,6 +10,8 @@ import { fslock } from './fslock';
 import { GlobalConfig } from '../core/config';
 import type { DecomposerConfig } from './orchestrator/types';
 import { DEFAULT_DECOMPOSER_CONFIG } from './orchestrator/types';
+import { getProjectMemory } from './memory';
+import { gitCreateBranch, gitCommitAll } from '../tools/git_tool';
 
 export class Orchestrator {
   private decomposer: Decomposer;
@@ -48,7 +50,8 @@ export class Orchestrator {
   async planWorkflow(goal: string): Promise<Plan> {
     // 使用 Decomposer 进行智能拆解
     try {
-      const decomposition = await this.decomposer.decompose(goal);
+      const projectMemory = getProjectMemory();
+      const decomposition = await this.decomposer.decompose(goal, projectMemory);
 
       const tasks: SubTask[] = decomposition.subtasks.map((t) => ({
         id: t.id,
@@ -95,7 +98,12 @@ You must return a JSON object that matches this schema:
 }
 Return ONLY valid JSON.`;
 
-    const response = await askLLM(systemPrompt, [{ role: 'user', content: goal }], undefined, undefined, 0.7, 'orchestrator');
+    const projectMemory = getProjectMemory();
+    const finalSystemPrompt = projectMemory
+      ? systemPrompt + `\n\nProject Memory (Strictly follow these rules):\n${projectMemory}`
+      : systemPrompt;
+
+    const response = await askLLM(finalSystemPrompt, [{ role: 'user', content: goal }], undefined, undefined, 0.7, 'orchestrator');
 
     const contentText = response.content.find(block => block.type === 'text');
     if (!contentText || contentText.type !== 'text') {
@@ -130,6 +138,13 @@ Return ONLY valid JSON.`;
     const plan = await this.planWorkflow(goal);
 
     workflowEvents.emit('workflowStarted', { goal: plan.goal, totalTasks: plan.tasks.length });
+
+    // --- Git Branching ---
+    // 为当前任务创建一个独立分支
+    const safeGoal = plan.goal.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 20).replace(/-+$/, '');
+    const branchName = `autocode/task-${Date.now()}-${safeGoal}`;
+    workflowEvents.emit('log', { taskId: 'orchestrator', message: `Creating git branch: ${branchName}` });
+    await gitCreateBranch(branchName);
 
     if (plan.warnings && plan.warnings.length > 0) {
       for (const warning of plan.warnings) {
@@ -198,6 +213,11 @@ Return ONLY valid JSON.`;
     workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Verifying and Synthesizing...' });
     const verifier = new Verifier();
     const finalOutput = await verifier.verifyAndSynthesize(plan, results, agentLogs);
+
+    // --- Git Committing ---
+    workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Committing changes to git...' });
+    const commitMsg = `feat: ${plan.goal.substring(0, 50)}\n\n${finalOutput.substring(0, 200)}...`;
+    await gitCommitAll(commitMsg);
 
     workflowEvents.emit('workflowCompleted', { result: finalOutput });
     return finalOutput;

@@ -463,7 +463,8 @@ export function detectCategory(userInput: string): DecomposerConfig['fewShotCate
 export function buildDecompositionPrompt(
   userInput: string,
   category: DecomposerConfig['fewShotCategory'],
-  config: DecomposerConfig
+  config: DecomposerConfig,
+  projectMemory: string = ''
 ): string {
   const template = getTemplate(category);
 
@@ -489,6 +490,9 @@ ${JSON.stringify(ex.subtasks, null, 2)}
 
 ${examplesText}
 
+${projectMemory ? `## 项目记忆 (Project Memory)
+在拆解任务时，请务必遵守以下全局项目规范或已知经验教训：
+${projectMemory}\n` : ''}
 ## 当前任务
 用户输入: "${userInput}"
 

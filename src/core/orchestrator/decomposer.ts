@@ -71,9 +71,10 @@ export class Decomposer {
    * 将用户任务分解为子任务
    *
    * @param userInput 用户的自然语言任务描述
+   * @param projectMemory 项目的长期记忆上下文
    * @returns 拆解结果（含并行批次）
    */
-  async decompose(userInput: string): Promise<DecompositionResult> {
+  async decompose(userInput: string, projectMemory: string = ''): Promise<DecompositionResult> {
     const warnings: string[] = [];
 
     // Step 1: 分类
@@ -82,7 +83,7 @@ export class Decomposer {
       : this.config.fewShotCategory;
 
     // Step 2: LLM 拆解
-    const prompt = buildDecompositionPrompt(userInput, category, this.config);
+    const prompt = buildDecompositionPrompt(userInput, category, this.config, projectMemory);
     const rawResponse = await this.llm.callLLM(prompt, {
       temperature: 0.3,
       maxTokens: 4000,

@@ -6,6 +6,7 @@ import { MCPClientWrapper } from '../mcp/client';
 import { Tool } from '@anthropic-ai/sdk/resources/messages.js';
 import { fslock } from './fslock';
 import { tokenBudget } from './tokenBudget';
+import { getProjectMemory } from './memory';
 
 export class SubAgent {
   private agentId: string;
@@ -47,6 +48,11 @@ ${task.sharedFiles ? `\nShared Files (read-only for you): ${task.sharedFiles.joi
 
 You have been provided with specific tools for this task. Use them if needed to gather information or perform actions.
 Please provide the best possible output for this sub-task.`;
+
+    const projectMemory = getProjectMemory();
+    const finalSystemPrompt = projectMemory 
+      ? systemPrompt + `\n\nProject Memory (Strictly follow these rules):\n${projectMemory}`
+      : systemPrompt;
 
     const activeMcpClients: MCPClientWrapper[] = [];
     const anthropicTools: Tool[] = [];
@@ -114,7 +120,7 @@ Please provide the best possible output for this sub-task.`;
       }
 
       const response = await askLLM(
-        systemPrompt,
+        finalSystemPrompt,
         [{ role: 'user', content: "Execute the sub-task." }],
         anthropicTools,
         async (name, input) => {
