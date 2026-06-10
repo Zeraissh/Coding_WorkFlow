@@ -1,0 +1,62 @@
+import express from 'express';
+import * as path from 'path';
+import { workflowEvents } from '../core/events';
+
+export class DashboardServer {
+  private app: express.Application;
+  private clients: express.Response[] = [];
+  private history: any[] = [];
+
+  constructor() {
+    this.app = express();
+    
+    // Serve static files
+    const publicPath = path.join(__dirname, 'public');
+    this.app.use(express.static(publicPath));
+
+    // SSE Endpoint
+    this.app.get('/events', (req, res) => {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders(); // flush the headers to establish SSE
+
+      this.clients.push(res);
+
+      // Send history so new clients get caught up
+      for (const event of this.history) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+
+      req.on('close', () => {
+        this.clients = this.clients.filter(c => c !== res);
+      });
+    });
+
+    this.setupListeners();
+  }
+
+  private broadcast(type: string, payload: any) {
+    const event = { type, payload, timestamp: new Date().toISOString() };
+    this.history.push(event);
+    const dataString = `data: ${JSON.stringify(event)}\n\n`;
+    for (const client of this.clients) {
+      client.write(dataString);
+    }
+  }
+
+  private setupListeners() {
+    workflowEvents.on('workflowStarted', (data) => this.broadcast('workflowStarted', data));
+    workflowEvents.on('taskStarted', (data) => this.broadcast('taskStarted', data));
+    workflowEvents.on('taskCompleted', (data) => this.broadcast('taskCompleted', data));
+    workflowEvents.on('workflowCompleted', (data) => this.broadcast('workflowCompleted', data));
+    workflowEvents.on('log', (data) => this.broadcast('log', data));
+  }
+
+  public start(port: number = 3000) {
+    this.app.listen(port, () => {
+      // Intentionally not logging to avoid cluttering the CLI,
+      // but the user can open http://localhost:3000
+    });
+  }
+}

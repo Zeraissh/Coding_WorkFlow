@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoCode Workflow Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 20px; color: #3f3f46; }
+    h1 { font-size: 1.5rem; color: #18181b; }
+    .container { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .panel { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .panel h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid #e4e4e7; padding-bottom: 10px; }
+    .log-box { height: 400px; overflow-y: auto; background: #18181b; color: #a1a1aa; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; }
+    .log-entry { margin-bottom: 4px; }
+    .log-entry.info { color: #3b82f6; }
+    .log-entry.warn { color: #f59e0b; }
+    .log-entry.success { color: #10b981; }
+    .task-list { list-style: none; padding: 0; margin: 0; }
+    .task-item { padding: 10px; border: 1px solid #e4e4e7; border-radius: 6px; margin-bottom: 10px; }
+    .task-item.pending { border-left: 4px solid #d4d4d8; }
+    .task-item.running { border-left: 4px solid #3b82f6; background-color: #eff6ff; }
+    .task-item.completed { border-left: 4px solid #10b981; }
+    .task-id { font-weight: bold; font-size: 0.85rem; color: #71717a; }
+  </style>
+</head>
+<body>
+  <div style="max-width: 1000px; margin: 0 auto 20px auto;">
+    <h1>AutoCode Workflow Dashboard</h1>
+    <p id="goal-text">Waiting for workflow to start...</p>
+  </div>
+  
+  <div class="container">
+    <div class="panel">
+      <h2>Tasks</h2>
+      <ul class="task-list" id="task-list">
+        <!-- Tasks will be injected here -->
+      </ul>
+    </div>
+    <div class="panel">
+      <h2>Logs</h2>
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+  <script>
+    const logBox = document.getElementById('log-box');
+    const taskList = document.getElementById('task-list');
+    const goalText = document.getElementById('goal-text');
+
+    const tasks = new Map();
+
+    function appendLog(message, type = 'default') {
+      const div = document.createElement('div');
+      div.className = `log-entry ${type}`;
+      div.innerText = message;
+      logBox.appendChild(div);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function renderTasks() {
+      taskList.innerHTML = '';
+      for (const [id, task] of tasks.entries()) {
+        const li = document.createElement('li');
+        li.className = `task-item ${task.status}`;
+        li.innerHTML = `
+          <div class="task-id">${id} (${task.status.toUpperCase()})</div>
+          <div>${task.description}</div>
+        `;
+        taskList.appendChild(li);
+      }
+    }
+
+    const evtSource = new EventSource('/events');
+    
+    evtSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const { type, payload, timestamp } = data;
+      const timeStr = new Date(timestamp).toLocaleTimeString();
+
+      if (type === 'workflowStarted') {
+        goalText.innerHTML = `<strong>Goal:</strong> ${payload.goal} <br><small>Total Tasks: ${payload.totalTasks}</small>`;
+        appendLog(`[${timeStr}] Workflow started`, 'info');
+      } 
+      else if (type === 'taskStarted') {
+        tasks.set(payload.taskId, { description: payload.description, status: 'running' });
+        renderTasks();
+        appendLog(`[${timeStr}] Task Started: ${payload.taskId}`, 'info');
+      }
+      else if (type === 'taskCompleted') {
+        if (tasks.has(payload.taskId)) {
+          tasks.get(payload.taskId).status = 'completed';
+          renderTasks();
+        }
+        appendLog(`[${timeStr}] Task Completed: ${payload.taskId} (Success: ${payload.success})`, payload.success ? 'success' : 'warn');
+      }
+      else if (type === 'workflowCompleted') {
+        appendLog(`[${timeStr}] Workflow Completed!`, 'success');
+      }
+      else if (type === 'log') {
+        let msgType = 'default';
+        if (payload.message.includes('⚠') || payload.message.toLowerCase().includes('fail')) msgType = 'warn';
+        else if (payload.message.toLowerCase().includes('success')) msgType = 'success';
+        
+        appendLog(`[${timeStr}] [${payload.taskId}] ${payload.message}`, msgType);
+      }
+    };
+  </script>
+</body>
+</html>

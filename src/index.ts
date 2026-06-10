@@ -3,6 +3,7 @@ import { Orchestrator } from './core/orchestrator';
 import { runInteractiveCLI } from './cli/interactive';
 import { runConfigCLI } from './cli/config';
 import { GlobalConfig } from './core/config';
+import { DashboardServer } from './dashboard/server';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -26,6 +27,11 @@ program
       }
 
       console.log(`Starting Dynamic Workflow for goal: "${goal}"`);
+      
+      const dashboard = new DashboardServer();
+      dashboard.start(3000);
+      console.log('\n[INFO] Dashboard running at http://localhost:3000\n');
+
       const orchestrator = new Orchestrator();
       const result = await orchestrator.executeWorkflow(goal);
       

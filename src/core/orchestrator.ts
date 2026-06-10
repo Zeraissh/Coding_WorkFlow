@@ -12,6 +12,7 @@ import type { DecomposerConfig } from './orchestrator/types';
 import { DEFAULT_DECOMPOSER_CONFIG } from './orchestrator/types';
 import { getProjectMemory } from './memory';
 import { gitCreateBranch, gitCommitAll } from '../tools/git_tool';
+import { ProjectIndexer } from './indexer';
 
 export class Orchestrator {
   private decomposer: Decomposer;
@@ -50,7 +51,17 @@ export class Orchestrator {
   async planWorkflow(goal: string): Promise<Plan> {
     // 使用 Decomposer 进行智能拆解
     try {
-      const projectMemory = getProjectMemory();
+      // --- Local RAG ---
+      const indexer = new ProjectIndexer();
+      await indexer.scanAndIndex();
+      const relevantCode = await indexer.search(goal, 3);
+      
+      let ragContext = '';
+      if (relevantCode.length > 0) {
+        ragContext = '\n\n【Local RAG 代码上下文片段】\n' + relevantCode.map(c => `// ${c.file}:${c.startLine}\n${c.content}`).join('\n\n');
+      }
+
+      const projectMemory = getProjectMemory() + ragContext;
       const decomposition = await this.decomposer.decompose(goal, projectMemory);
 
       const tasks: SubTask[] = decomposition.subtasks.map((t) => ({
@@ -98,7 +109,16 @@ You must return a JSON object that matches this schema:
 }
 Return ONLY valid JSON.`;
 
-    const projectMemory = getProjectMemory();
+    // --- Local RAG ---
+    const indexer = new ProjectIndexer();
+    await indexer.scanAndIndex();
+    const relevantCode = await indexer.search(goal, 3);
+    let ragContext = '';
+    if (relevantCode.length > 0) {
+      ragContext = '\n\n【Local RAG 代码上下文片段】\n' + relevantCode.map(c => `// ${c.file}:${c.startLine}\n${c.content}`).join('\n\n');
+    }
+
+    const projectMemory = getProjectMemory() + ragContext;
     const finalSystemPrompt = projectMemory
       ? systemPrompt + `\n\nProject Memory (Strictly follow these rules):\n${projectMemory}`
       : systemPrompt;
