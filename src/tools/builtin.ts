@@ -67,9 +67,16 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
         return content;
       }
       case 'write_file': {
-        if (agentId) await fslock().acquireWrite(args.path, agentId);
-        fs.writeFileSync(args.path, args.content, 'utf-8');
-        if (agentId) fslock().release(args.path, agentId);
+        if (agentId) {
+          await fslock().acquireWrite(args.path, agentId);
+          try {
+            fslock().writeFile(args.path, agentId, args.content);
+          } finally {
+            fslock().release(args.path, agentId);
+          }
+        } else {
+          fs.writeFileSync(args.path, args.content, 'utf-8');
+        }
         return `Successfully wrote to ${args.path}`;
       }
       case 'search_web':

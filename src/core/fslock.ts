@@ -12,6 +12,8 @@
  * - 冲突日志（供 Verifier 第一阶段使用）
  */
 
+import * as fs from 'fs';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -23,6 +25,7 @@ export interface FileLock {
   ownerAgentId: string;
   mode: LockMode;
   acquiredAt: number;
+  reentryCount: number;
 }
 
 export interface WriteQueueItem {
@@ -117,6 +120,7 @@ export class FileLockManager {
 
     // 同一 Agent 已持有该文件的写锁 → 重入
     if (existing && existing.ownerAgentId === agentId && existing.mode === 'write') {
+      existing.reentryCount++;
       return;
     }
 
@@ -152,6 +156,7 @@ export class FileLockManager {
         ownerAgentId: agentId,
         mode: 'read',
         acquiredAt: Date.now(),
+        reentryCount: 0,
       });
       // 读锁没有超时，因为不阻塞他人
     }
@@ -168,6 +173,12 @@ export class FileLockManager {
 
     // 锁不属于此 Agent → 忽略
     if (!existing || existing.ownerAgentId !== agentId) {
+      return;
+    }
+
+    // 处理重入释放
+    if (existing.reentryCount > 0) {
+      existing.reentryCount--;
       return;
     }
 
@@ -201,6 +212,23 @@ export class FileLockManager {
 
     // 处理等待队列中的下一个请求
     this.processQueue(normalizedPath);
+  }
+
+  /**
+   * 同步安全写入封装
+   * 确保执行底层写入的那一刻，Agent 仍然实际持有锁（防止超时剥夺引发脏写）
+   */
+  writeFile(filePath: string, agentId: string, content: string): void {
+    const normalizedPath = this.normalizePath(filePath);
+    
+    if (this.config.enabled) {
+      const existing = this.locks.get(normalizedPath);
+      if (!existing || existing.ownerAgentId !== agentId || existing.mode !== 'write') {
+        throw new Error(`Write failed: Agent ${agentId} does not hold a write lock for ${filePath}. The lock may have timed out and been released.`);
+      }
+    }
+    
+    fs.writeFileSync(filePath, content, 'utf-8');
   }
 
   /**
@@ -256,6 +284,7 @@ export class FileLockManager {
       ownerAgentId: agentId,
       mode: 'write',
       acquiredAt: Date.now(),
+      reentryCount: 0,
     });
 
     // 设置超时计时器

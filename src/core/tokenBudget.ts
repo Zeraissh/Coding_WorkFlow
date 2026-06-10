@@ -418,12 +418,22 @@ export class TokenBudgetManager {
       return;
     }
 
-    // 按权重分配 surplus
-    const activeComplexitySum = activeAllocations.length; // 简化：均分
-    const perAgentSurplus = Math.floor(surplus / activeComplexitySum);
+    // 计算所有活跃 Agent 剩余的待分配额度总和
+    const totalRemainingAlloc = activeAllocations.reduce((sum, { subtaskId: id, allocation: targetAlloc }) => {
+      const s = this.budget!.taskSpent.get(id) || 0;
+      return sum + Math.max(0, targetAlloc.allocatedTokens - s);
+    }, 0);
 
+    if (totalRemainingAlloc <= 0) return; // 理论上不会发生，但防止除零
+
+    // 按剩余额度比例分配 surplus
     for (const { subtaskId: targetId, allocation: targetAlloc } of activeAllocations) {
-      const newAllocated = targetAlloc.allocatedTokens + perAgentSurplus;
+      const s = this.budget!.taskSpent.get(targetId) || 0;
+      const remaining = Math.max(0, targetAlloc.allocatedTokens - s);
+      const proportion = remaining / totalRemainingAlloc;
+      const bonus = Math.floor(surplus * proportion);
+
+      const newAllocated = targetAlloc.allocatedTokens + bonus;
       targetAlloc.allocatedTokens = newAllocated;
       targetAlloc.warningThreshold = Math.floor(newAllocated * this.config.thresholds.warning);
       targetAlloc.criticalThreshold = Math.floor(newAllocated * this.config.thresholds.critical);
@@ -437,8 +447,8 @@ export class TokenBudgetManager {
       timestamp: Date.now(),
       agentId: completedAgentId,
       subtaskId,
-      message: `${surplus.toLocaleString()} surplus tokens → 均分给 ${activeAllocations.length} 个活跃Agent`,
-      data: { surplus, recipientCount: activeAllocations.length, perAgent: perAgentSurplus },
+      message: `${surplus.toLocaleString()} surplus tokens → 按比例分配给 ${activeAllocations.length} 个活跃Agent`,
+      data: { surplus, recipientCount: activeAllocations.length },
     });
   }
 
