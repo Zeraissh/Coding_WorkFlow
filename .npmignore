@@ -1,0 +1,27 @@
+# Tests
+tests/
+coverage/
+
+# Local configuration
+.workflow_config.json
+.env
+
+# Snapshots and caching
+.workflow/
+.pytest_cache/
+__pycache__/
+
+# Source code (we publish dist/)
+# Note: we exclude src but include src/scripts if needed.
+# For now, let's just exclude the test directory and keep src for sourcemaps.
+# (Leaving src/ uncommented for source maps)
+
+# Examples
+examples/
+
+# Dev docs
+ANALYSIS_REPORT.md
+EXECUTION_REPORT.md
+execution_plan.md
+Dynamic_Workflow_Plan.md
+project_structure.md

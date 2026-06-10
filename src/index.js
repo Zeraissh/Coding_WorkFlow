@@ -3,7 +3,7 @@ import { Orchestrator } from './core/orchestrator';
 import { runInteractiveCLI } from './cli/interactive';
 import { runConfigCLI } from './cli/config';
 import { GlobalConfig } from './core/config';
-import { DashboardServer } from './dashboard/server';
+import { startServer } from './server/index';
 import * as dotenv from 'dotenv';
 dotenv.config();
 const program = new Command();
@@ -18,13 +18,18 @@ program
     .option('-r, --resume', 'Resume from a previously interrupted state')
     .action(async (goal, options) => {
     try {
-        if (!process.env.ANTHROPIC_API_KEY) {
-            console.error("Error: ANTHROPIC_API_KEY is not set in the environment.");
+        let config = GlobalConfig.get();
+        if (!config.apiKey && process.env.ANTHROPIC_API_KEY && config.provider === 'anthropic') {
+            GlobalConfig.update({ apiKey: process.env.ANTHROPIC_API_KEY });
+            config = GlobalConfig.get();
+        }
+        if (!config.apiKey) {
+            console.error("\nError: No API Key configured.");
+            console.error("Please run 'autocode config' to set up your LLM provider and API key.");
             process.exit(1);
         }
         console.log(`Starting Dynamic Workflow for goal: "${goal}"`);
-        const dashboard = new DashboardServer();
-        dashboard.start(3000);
+        startServer(3000);
         console.log('\n[INFO] Dashboard running at http://localhost:3000\n');
         const orchestrator = new Orchestrator();
         const execOptions = options.resume ? { resume: true } : undefined;
@@ -62,8 +67,7 @@ program
             process.exit(1);
         }
     }
-    const dashboard = new DashboardServer();
-    dashboard.start(3000);
+    startServer(3000);
     console.log('\n[INFO] Dashboard running at http://localhost:3000\n');
     await runInteractiveCLI();
 });

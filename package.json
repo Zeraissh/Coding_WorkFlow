@@ -1,14 +1,17 @@
 {
   "name": "coding_workflow",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.0.1",
+  "description": "Dynamic workflow engine for multi-agent LLM orchestration",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "autocode": "./bin/autocode.cjs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "vitest run",
+    "reverse": "tsx src/scripts/reverseString.ts"
   },
   "repository": {
     "type": "git",

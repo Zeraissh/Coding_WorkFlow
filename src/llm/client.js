@@ -73,6 +73,50 @@ function mapAnthropicMessageToOpenAI(messages) {
     }
     return openaiMessages;
 }
+async function withRetry(operation, agentId, taskId, maxRetries = 3) {
+    let attempt = 0;
+    while (true) {
+        try {
+            return await operation();
+        }
+        catch (error) {
+            attempt++;
+            const status = error?.status || error?.response?.status;
+            // Fatal errors: don't retry
+            if (status === 401 || status === 403 || status === 404) {
+                const msg = `Fatal LLM API Error (${status}): ${error.message}. Please check your API key and model configuration.`;
+                if (taskId)
+                    workflowEvents.emit('log', { taskId, message: msg });
+                throw new Error(msg);
+            }
+            if (attempt > maxRetries) {
+                throw error;
+            }
+            const delay = Math.pow(2, attempt - 1) * 2000;
+            const prefix = agentId ? `[${agentId}] ` : '';
+            const msg = `${prefix}LLM API Error (${status || error.message}). Retrying in ${delay}ms (Attempt ${attempt}/${maxRetries})...`;
+            if (taskId)
+                workflowEvents.emit('log', { taskId, message: msg });
+            else
+                console.warn(msg);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
+/**
+ * Generic abstraction over multiple LLM providers (Anthropic, OpenAI, DeepSeek).
+ * Handles structured inputs, manages prompt caching, maps tools to provider-specific formats,
+ * invokes tools recursively, and handles retry mechanisms.
+ *
+ * @param {string} system - The system prompt defining the agent's persona and critical context.
+ * @param {Anthropic.MessageParam[]} messages - The conversation history or current prompt.
+ * @param {Anthropic.Tool[]} [tools] - Optional tool definitions mapped to the model.
+ * @param {(name: string, input: any) => Promise<string>} [onToolCall] - Callback executed when the LLM requests a tool.
+ * @param {number} [temperature=0.7] - The model's sampling temperature.
+ * @param {string} [taskId] - The current Task ID for logging context.
+ * @param {string} [agentId] - The executing SubAgent ID for budget tracking.
+ * @returns {Promise<Anthropic.Message>} The final response from the LLM after all tool calls complete.
+ */
 export async function askLLM(system, messages, tools, onToolCall, temperature = 0.7, taskId, agentId) {
     const config = GlobalConfig.get();
     if (config.provider === 'openai' || config.provider === 'deepseek') {
@@ -103,7 +147,7 @@ async function askOpenAI(system, messages, tools, onToolCall, temperature, taskI
             options.extra_body = { thinking: { type: "enabled" } };
         }
     }
-    let response = await openai.chat.completions.create(options);
+    let response = await withRetry(() => openai.chat.completions.create(options), agentId, taskId);
     while (response.choices[0].message.tool_calls && onToolCall) {
         const msg = response.choices[0].message;
         const anthropicContent = [];
@@ -158,7 +202,7 @@ async function askOpenAI(system, messages, tools, onToolCall, temperature, taskI
                 { role: 'system', content: system },
                 ...mapAnthropicMessageToOpenAI(messages)
             ];
-            response = await openai.chat.completions.create(options);
+            response = await withRetry(() => openai.chat.completions.create(options), agentId, taskId);
         }
         else {
             break;
@@ -176,7 +220,7 @@ async function askOpenAI(system, messages, tools, onToolCall, temperature, taskI
     if (totalTokens > 0) {
         if (agentId)
             tokenBudget().reportUsage(agentId, totalTokens);
-        workflowEvents.emit('llmUsageReport', { tokens: totalTokens, cachedTokens, calls: 1 });
+        workflowEvents.emit('llmUsageReport', { taskId, agentId, tokens: totalTokens, cachedTokens, calls: 1 });
     }
     return {
         id: response.id,
@@ -194,13 +238,19 @@ async function askAnthropic(system, messages, tools, onToolCall, temperature, ta
     const options = {
         model: config.model,
         max_tokens: 4096,
-        system,
+        system: [
+            {
+                type: "text",
+                text: system,
+                cache_control: { type: "ephemeral" }
+            }
+        ],
         messages,
         temperature,
     };
     if (tools && tools.length > 0)
         options.tools = tools;
-    let response = await anthropic.messages.create(options);
+    let response = await withRetry(() => anthropic.messages.create(options), agentId, taskId);
     while (response.stop_reason === 'tool_use' && onToolCall) {
         messages.push({ role: 'assistant', content: response.content });
         const toolResults = [];
@@ -238,7 +288,7 @@ async function askAnthropic(system, messages, tools, onToolCall, temperature, ta
         if (toolResults.length > 0) {
             messages.push({ role: 'user', content: toolResults });
             options.messages = messages;
-            response = await anthropic.messages.create(options);
+            response = await withRetry(() => anthropic.messages.create(options), agentId, taskId);
         }
         else {
             break;
@@ -250,7 +300,7 @@ async function askAnthropic(system, messages, tools, onToolCall, temperature, ta
     if (totalTokens > 0) {
         if (agentId)
             tokenBudget().reportUsage(agentId, totalTokens);
-        workflowEvents.emit('llmUsageReport', { tokens: totalTokens, cachedTokens, calls: 1 });
+        workflowEvents.emit('llmUsageReport', { taskId, agentId, tokens: totalTokens, cachedTokens, calls: 1 });
     }
     return response;
 }

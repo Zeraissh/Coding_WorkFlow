@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Send, Shield, ShieldAlert, CheckCircle2, PlayCircle, Clock } from 'lucide-react';
 import './index.css';
 
@@ -7,6 +7,8 @@ interface Task {
   description: string;
   status: 'pending' | 'running' | 'completed';
   logs: string[];
+  tokensSpent?: number;
+  filesChanged?: string[];
 }
 
 interface ApprovalRequest {
@@ -25,11 +27,19 @@ function App() {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [workflowStatus, setWorkflowStatus] = useState<'idle' | 'running' | 'completed'>('idle');
   const [finalResult, setFinalResult] = useState('');
+  const [tokensSpent, setTokensSpent] = useState<number | null>(null);
+  const [diffText, setDiffText] = useState<string | null>(null);
+  const [plugins, setPlugins] = useState<string[]>([]);
+  const [memory, setMemory] = useState<string>('');
 
   useEffect(() => {
     fetch(`${API_BASE}/config`)
       .then(r => r.json())
-      .then(d => setRequireApproval(d.requireApproval))
+      .then(d => {
+        setRequireApproval(d.requireApproval);
+        setPlugins(d.activePlugins || []);
+        setMemory(d.projectMemory || '');
+      })
       .catch(console.error);
   }, []);
 
@@ -45,9 +55,10 @@ function App() {
 
   const startWorkflow = async () => {
     if (!goal.trim()) return;
-    setTasks([]);
-    setApprovals([]);
     setFinalResult('');
+    setTokensSpent(null);
+    setDiffText(null);
+    setTasks([{ id: 'orchestrator', description: 'Planning and Orchestrating Workflow...', status: 'running', logs: [] }]);
     setWorkflowStatus('running');
     
     await fetch(`${API_BASE}/workflow`, {
@@ -70,12 +81,14 @@ function App() {
 
     eventSource.addEventListener('log', (e) => {
       const data = JSON.parse(e.data);
-      setTasks(prev => prev.map(t => {
-        if (t.id === data.taskId) {
-          return { ...t, logs: [...t.logs, data.message] };
+      setTasks(prev => {
+        const exists = prev.find(t => t.id === data.taskId);
+        if (exists) {
+          return prev.map(t => t.id === data.taskId ? { ...t, logs: [...t.logs, data.message] } : t);
+        } else {
+          return [...prev, { id: data.taskId, description: data.taskId === 'orchestrator' ? 'Orchestrating Workflow...' : 'Executing Task', status: 'running', logs: [data.message] }];
         }
-        return t;
-      }));
+      });
     });
 
     eventSource.addEventListener('taskCompleted', (e) => {
@@ -88,6 +101,36 @@ function App() {
       }));
     });
 
+    eventSource.addEventListener('llmUsageReport', (e) => {
+      const data = JSON.parse(e.data);
+      if (data.taskId) {
+        setTasks(prev => prev.map(t => t.id === data.taskId ? { ...t, tokensSpent: data.tokens } : t));
+      }
+    });
+
+    eventSource.addEventListener('fileChanged', (e) => {
+      const data = JSON.parse(e.data);
+      if (data.taskId) {
+        setTasks(prev => prev.map(t => {
+          if (t.id === data.taskId) {
+            const files = t.filesChanged || [];
+            if (!files.includes(data.file)) {
+              return { ...t, filesChanged: [...files, data.file] };
+            }
+          }
+          return t;
+        }));
+      }
+    });
+
+    eventSource.addEventListener('error', (e: any) => {
+      if (e.data) {
+        const data = JSON.parse(e.data);
+        setFinalResult(`Error: ${data.message}`);
+        setWorkflowStatus('completed');
+      }
+    });
+
     eventSource.addEventListener('approvalRequested', (e) => {
       const data = JSON.parse(e.data);
       setApprovals(prev => [...prev, data]);
@@ -96,6 +139,8 @@ function App() {
     eventSource.addEventListener('workflowCompleted', (e) => {
       const data = JSON.parse(e.data);
       setFinalResult(data.result);
+      if (data.tokensSpent) setTokensSpent(data.tokensSpent);
+      if (data.diff) setDiffText(data.diff);
       setWorkflowStatus('completed');
     });
 
@@ -135,34 +180,90 @@ function App() {
         </button>
       </div>
 
-      <div className="kanban">
-        {tasks.map(task => (
+      <div className="main-layout" style={{ display: 'flex', gap: '2rem', padding: '0 2rem' }}>
+        <div className="sidebar" style={{ flex: '0 0 300px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="panel">
+            <h3 style={{ margin: '0 0 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>🔌 Active Plugins</h3>
+            {plugins.length === 0 ? <p style={{ color: 'var(--text-secondary)' }}>No plugins loaded</p> : (
+              <ul style={{ paddingLeft: '1.5rem', margin: 0, color: 'var(--text-primary)' }}>
+                {plugins.map(p => <li key={p}>{p}</li>)}
+              </ul>
+            )}
+          </div>
+          <div className="panel">
+            <h3 style={{ margin: '0 0 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>🧠 Project Memory</h3>
+            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', color: 'var(--text-secondary)', background: 'rgba(0,0,0,0.1)', padding: '1rem', borderRadius: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+              {memory || 'No lessons learned yet.'}
+            </pre>
+          </div>
+        </div>
+
+        <div className="kanban" style={{ flex: '1' }}>
+          {tasks.map(task => (
           <div key={task.id} className="task-card">
             <div className="task-header">
               <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{task.id}</h3>
-              <span className={`task-status status-${task.status}`}>
-                {task.status === 'running' && <PlayCircle size={14} style={{verticalAlign: 'text-bottom', marginRight: 4}}/>}
-                {task.status === 'completed' && <CheckCircle2 size={14} style={{verticalAlign: 'text-bottom', marginRight: 4}}/>}
-                {task.status === 'pending' && <Clock size={14} style={{verticalAlign: 'text-bottom', marginRight: 4}}/>}
-                {task.status}
-              </span>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                {task.tokensSpent !== undefined && (
+                  <span style={{ fontSize: '0.8rem', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '2px 8px', borderRadius: '12px' }}>
+                    {task.tokensSpent.toLocaleString()} Tokens
+                  </span>
+                )}
+                <span className={`task-status status-${task.status}`}>
+                  {task.status === 'running' && <PlayCircle size={14} style={{verticalAlign: 'text-bottom', marginRight: 4}}/>}
+                  {task.status === 'completed' && <CheckCircle2 size={14} style={{verticalAlign: 'text-bottom', marginRight: 4}}/>}
+                  {task.status === 'pending' && <Clock size={14} style={{verticalAlign: 'text-bottom', marginRight: 4}}/>}
+                  {task.status}
+                </span>
+              </div>
             </div>
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>{task.description}</p>
+            
+            {task.filesChanged && task.filesChanged.length > 0 && (
+              <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                {task.filesChanged.map(f => (
+                  <span key={f} style={{ fontSize: '0.75rem', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', padding: '2px 6px', borderRadius: '4px' }}>
+                    📝 {f}
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="task-logs">
-              {task.logs.map((log, i) => (
-                <div key={i} className="log-entry">{log}</div>
-              ))}
+              {task.logs.map((log, i) => {
+                const isToolCall = log.includes('[Tool Call]');
+                const isToolResult = log.includes('[Tool Result]');
+                const className = `log-entry ${isToolCall ? 'log-tool-call' : ''} ${isToolResult ? 'log-tool-result' : ''}`;
+                return <div key={i} className={className}>{log}</div>;
+              })}
             </div>
           </div>
         ))}
         {workflowStatus === 'completed' && (
           <div className="task-card" style={{ gridColumn: '1 / -1', background: 'rgba(59, 130, 246, 0.1)' }}>
-            <h3 style={{ margin: 0, color: '#60a5fa' }}>Final Synthesized Output</h3>
-            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', color: 'var(--text-primary)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, color: '#60a5fa' }}>🎉 Final Synthesized Output</h3>
+              {tokensSpent !== null && (
+                <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '4px 12px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600 }}>
+                  Tokens Consumed: {tokensSpent.toLocaleString()}
+                </span>
+              )}
+            </div>
+            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', color: 'var(--text-primary)', marginBottom: '1rem' }}>
               {finalResult}
             </pre>
+            
+            {diffText && (
+              <>
+                <h4 style={{ margin: '1rem 0 0.5rem', color: '#a78bfa' }}>File Modifications (Diff)</h4>
+                <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: '#cbd5e1', background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+                  {diffText}
+                </pre>
+              </>
+            )}
           </div>
         )}
+      </div>
       </div>
 
       {approvals.length > 0 && (

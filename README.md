@@ -14,12 +14,12 @@
 ## 🚀 进阶更新特性（最新功能）
 
 * **🌐 多模型与多服务商支持**：完全移除了仅支持 Anthropic 的限制。现在你可以自由切换使用：
-  * **Anthropic** (如 `claude-3-5-sonnet-20241022`)
+  * **Anthropic** (如 `claude-3-5-sonnet-20241022`) 支持 Prompt Caching 提示词缓存
   * **OpenAI** (如 `gpt-4o`)
   * **DeepSeek** (支持最新的 `deepseek-v4-pro` 与 `deepseek-v4-flash`)
 * **🧠 DeepSeek 深度思考全支持**：配置时可自定义推理强度（Reasoning Effort）。底层自带强大的 `<thinking>` 标签剥离和逻辑链展示能力，不会阻碍系统的任务解析。
-* **⚙️ 交互式配置台 (`autocode config`)**：不再需要手动写 `.env` 文件。内建命令行交互面板供你在命令行内选择模型和输入 API Key。
-* **💻 跨项目全局 CLI 支持**：支持 `npm link` 全局注册，随时随地在任何项目目录下输入 `autocode chat` 召唤工作流。
+* **🚦 高并发安全控制引擎**：内置 AsyncPool 异步线程池，防止被 LLM 服务商触发 429 频控封禁，大项目大规划下依然平稳丝滑。
+* **🛠️ 极端健壮容错机制**：具有 LLM 请求指数退避（Exponential Backoff）重试、FSLock 多代理竞态锁重试、以及极端 LLM 幻觉下 JSON 解析彻底损毁的底层 fallback 回退单任务方案。
 
 ---
 
@@ -27,7 +27,7 @@
 
 在多 Agent 并发操作的底层，系统搭载了四大核心机制保驾护航：
 
-1. **🔒 基于微任务的文件锁 (`FSLock`)**：独创的 Promise 异步队列排队机制。彻底杜绝多个 Agent 并行写入同一文件导致的竞态覆写与代码损坏，并内置超时死锁熔断保护，支持安全的锁重入。
+1. **🔒 基于微任务的文件锁 (`FSLock`)**：独创的 Promise 异步队列排队机制。彻底杜绝多个 Agent 并行写入同一文件导致的竞态覆写与代码损坏，并内置超时熔断保护，支持安全的锁重入与冲突自愈排队。
 2. **💰 动态 Token 预算管家 (`Token Budget`)**：彻底告别 API 账单暴雷！Orchestrator 根据任务复杂度（权重）自动给每个 Agent 分配初始 Token 预算。带有 70%(提醒)/85%(截断)/95%(强制终止) 三级熔断预警。当有 Agent 提前完工时，其未消耗的 Token 盈余会**按剩余比例动态重分配**给其他存活的 Agent，将 API 资金利用率推向极致。
 3. **🧠 智能拓扑分解 (`Smart Decomposer`)**：Orchestrator 不仅能拆解子任务，还能精准评估每个任务的 `estimatedComplexity`（估算复杂度），并自动分析子任务间的串并行逻辑依赖 (`dependencies`)。
 4. **🕵️ 双轨制二阶验证 (`Two-phase Verifier`)**：所有 Agent 在工作时会自动打点留下精细的行动日志（`AgentExecutionLog`，涵盖修改了哪些代码、执行了哪些 Shell）。在收尾阶段，Verifier 将运用基于规则的 `AutoChecker`（验证测试、语法）与大模型驱动的 `SemanticReviewer`（验证业务语义）进行地毯式验收！
@@ -42,9 +42,10 @@
 git clone https://github.com/Zeraissh/Coding_WorkFlow.git
 cd Coding_WorkFlow
 npm install
+npm run build
 ```
 
-### 2. 全局注册命令 (可选但极力推荐)
+### 2. 全局注册命令 (极力推荐)
 
 为了能在其他任意项目中直接使用，执行：
 
@@ -64,15 +65,19 @@ autocode config
 
 ---
 
-## 🎯 如何使用
+## 🎯 快速上手 (Quick Start)
 
-配置完成后，在你想要修复 Bug、新建项目或者修改代码的任意文件夹中，运行：
-
+### 方式 A: 交互式 CLI (推荐日常使用)
+配置完成后，在你想要修改代码的任意文件夹中，运行：
 ```bash
 autocode chat
 ```
+然后输入你的需求（例如：`找出这个项目里导致串口断开的 Bug 并修复它`）。
 
-然后输入你的需求（例如：`找出这个项目里导致串口断开的 Bug 并修复它` 或 `用Python写一个带计分板的贪吃蛇游戏，并且提供一份相应的单元测试`）。
+### 方式 B: 编程式调用 (SDK 形式)
+请参考项目目录下的 `examples/` 文件夹：
+- `examples/basic-workflow.ts`: 演示如何通过代码直接实例化 `Orchestrator` 并执行复杂 Workflow。
+- `examples/custom-tool.ts`: 演示如何为 SubAgent 注入你自定义的本地 Tool 工具。
 
 > **内部运行过程：**
 > 1. **拆解**：Orchestrator 结构化分解为：“编写贪吃蛇核心逻辑”、“编写计分板逻辑”、“编写测试用例” 等子任务。

@@ -116,7 +116,10 @@ def cleanup() -> None:
     # --- Stop forwarding threads (Unix PTY) ---
     for t, stop_event, fd in _forwarding_threads:
         stop_event.set()
-        t.join(timeout=2.0)
+        try:
+            t.join(timeout=2.0)
+        except RuntimeError:
+            pass
     for fd in _unix_master_fds:
         try:
             os.close(fd)

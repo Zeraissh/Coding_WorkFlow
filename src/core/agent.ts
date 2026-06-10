@@ -10,10 +10,20 @@ import { getProjectMemory } from './memory';
 import { MCPRegistry } from '../mcp/registry';
 import { workflowEvents } from './events';
 
+/**
+ * Represents an autonomous sub-agent responsible for executing a single 
+ * discrete task within a larger workflow. Manages its own tool execution, 
+ * token budget, and lifecycle.
+ */
 export class SubAgent {
   private agentId: string;
   private executionLog: AgentExecutionLog;
 
+  /**
+   * Initializes a new SubAgent with a unique identifier.
+   *
+   * @param {string} [agentId] - An optional custom identifier. If not provided, a random one is generated.
+   */
   constructor(agentId?: string) {
     this.agentId = agentId || `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     this.executionLog = {
@@ -27,14 +37,34 @@ export class SubAgent {
     };
   }
 
+  /**
+   * Retrieves the unique identifier of this agent.
+   *
+   * @returns {string} The agent ID.
+   */
   getAgentId(): string {
     return this.agentId;
   }
 
+  /**
+   * Retrieves a copy of the execution log containing detailed metrics and operations performed by this agent.
+   *
+   * @returns {AgentExecutionLog} A safe clone of the internal execution log.
+   */
   getExecutionLog(): AgentExecutionLog {
     return { ...this.executionLog, files: [...this.executionLog.files] };
   }
 
+  /**
+   * Executes a given sub-task utilizing the LLM and the tools provided.
+   * This involves injecting relevant project context, setting up MCP clients,
+   * handling dynamic tool execution callbacks, and cleaning up resources upon completion.
+   *
+   * @param {SubTask} task - The specific sub-task definition.
+   * @param {string} globalContext - High-level workflow context or goal.
+   * @param {ToolRecord[]} toolRecords - A set of tools specifically retrieved/allocated for this task.
+   * @returns {Promise<TaskResult>} The result of the task execution including success status and final output.
+   */
   async execute(task: SubTask, globalContext: string, toolRecords: ToolRecord[]): Promise<TaskResult> {
     this.executionLog.subtaskId = task.id;
 
@@ -158,7 +188,18 @@ Please provide the best possible output for this sub-task.`;
           const executor = toolExecutors.get(name);
           if (executor) {
             const result = await executor(input);
-            if (task.id) workflowEvents.emit('log', { taskId: task.id, message: `[${this.agentId}] [Tool Result] ${result.slice(0, 100)}...` });
+            if (task.id) {
+              workflowEvents.emit('log', { taskId: task.id, message: `[${this.agentId}] [Tool Result] ${result.slice(0, 100)}...` });
+              if (name === 'write_file' || name === 'replace_file_content' || name === 'multi_replace_file_content') {
+                try {
+                  const args = typeof input === 'string' ? JSON.parse(input) : input;
+                  const filePath = args.TargetFile || args.path;
+                  if (filePath) {
+                    workflowEvents.emit('fileChanged', { taskId: task.id, file: filePath });
+                  }
+                } catch (e) {}
+              }
+            }
             return result;
           }
           throw new Error(`Tool ${name} not found`);

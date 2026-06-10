@@ -1,5 +1,21 @@
-信息: 找不到 "python3.12"。
-信息: 找不到 "python3.11"。
-信息: 找不到 "python3.10"。
-信息: 找不到 ";"。
-信息: 找不到 "--version"。
+src/core/verifier/autoChecker.ts(491,47): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/core/verifier/autoChecker.ts(508,24): error TS2379: Argument of type '{ name: string; kind: "reexport"; source: string | undefined; }' is not assignable to parameter of type 'ExportEntry' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'source' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/core/verifier/autoChecker.ts(512,22): error TS2379: Argument of type '{ name: string; kind: "reexport"; source: string | undefined; }' is not assignable to parameter of type 'ExportEntry' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'source' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/core/verifier/autoChecker.ts(533,20): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/core/verifier/autoChecker.ts(691,24): error TS2532: Object is possibly 'undefined'.
+src/core/verifier/autoChecker.ts(692,33): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/core/verifier/autoChecker.ts(693,33): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/core/verifier/autoChecker.ts(736,40): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/core/verifier/autoChecker.ts(737,40): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
