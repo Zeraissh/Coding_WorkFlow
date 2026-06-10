@@ -14,6 +14,7 @@ import { getProjectMemory } from './memory';
 import { gitCreateBranch, gitCommitAll } from '../tools/git_tool';
 import { ProjectIndexer } from './indexer';
 import { StateManager, WorkflowState } from './stateManager';
+import { SnapshotManager } from './snapshotManager';
 
 export class Orchestrator {
   private decomposer: Decomposer;
@@ -162,6 +163,7 @@ Return ONLY valid JSON.`;
     let results: TaskResult[] = [];
     let agentLogs: AgentExecutionLog[] = [];
     let startBatchIndex = 0;
+    const snapshotManager = new SnapshotManager();
 
     if (state && state.goal === goal) {
       workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Resuming previous workflow state...' });
@@ -197,6 +199,9 @@ Return ONLY valid JSON.`;
           workflowEvents.emit('log', { taskId: 'orchestrator', message: `⚠ ${warning}` });
         }
       }
+      
+      workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Creating atomic snapshot backup...' });
+      snapshotManager.createSnapshot();
     }
 
     const retriever = new ToolRetriever();
@@ -282,10 +287,11 @@ Return ONLY valid JSON.`;
       });
 
       if (!approved) {
-        workflowEvents.emit('log', { taskId: 'orchestrator', message: 'User rejected the changes.' });
-        workflowEvents.emit('workflowCompleted', { result: 'User rejected the changes. Check the log and rerun.' });
+        workflowEvents.emit('log', { taskId: 'orchestrator', message: 'User rejected the changes. Rolling back snapshot...' });
+        snapshotManager.rollback();
+        workflowEvents.emit('workflowCompleted', { result: 'User rejected the changes. Code has been rolled back.' });
         stateManager.clearState();
-        return 'Workflow rejected by user.';
+        return 'Workflow rejected by user. Rolled back successfully.';
       }
     }
 
@@ -298,6 +304,7 @@ Return ONLY valid JSON.`;
     
     // 清理状态
     stateManager.clearState();
+    snapshotManager.prune();
     return finalOutput;
   }
 }
