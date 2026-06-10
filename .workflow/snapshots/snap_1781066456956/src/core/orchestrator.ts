@@ -16,6 +16,7 @@ import { ProjectIndexer } from './indexer';
 import { StateManager, WorkflowState } from './stateManager';
 import { SnapshotManager } from './snapshotManager';
 import { MCPRegistry } from '../mcp/registry';
+import { safeListDir } from '../tools/builtin';
 
 export class Orchestrator {
   private decomposer: Decomposer;
@@ -64,7 +65,13 @@ export class Orchestrator {
         ragContext = '\n\n【Local RAG 代码上下文片段】\n' + relevantCode.map(c => `// ${c.file}:${c.startLine}\n${c.content}`).join('\n\n');
       }
 
-      const projectMemory = getProjectMemory() + ragContext;
+      // Inject Project Map
+      const projectMapLines = safeListDir(process.cwd(), 2);
+      const projectMapContext = projectMapLines.length > 0 
+        ? `\n\n【Project Directory Map (Depth 2)】\n${projectMapLines.join('\n')}` 
+        : '';
+
+      const projectMemory = getProjectMemory() + ragContext + projectMapContext;
       const decomposition = await this.decomposer.decompose(goal, projectMemory);
 
       const tasks: SubTask[] = decomposition.subtasks.map((t) => ({
@@ -121,7 +128,12 @@ Return ONLY valid JSON.`;
       ragContext = '\n\n【Local RAG 代码上下文片段】\n' + relevantCode.map(c => `// ${c.file}:${c.startLine}\n${c.content}`).join('\n\n');
     }
 
-    const projectMemory = getProjectMemory() + ragContext;
+    const projectMapLines = safeListDir(process.cwd(), 2);
+    const projectMapContext = projectMapLines.length > 0 
+      ? `\n\n【Project Directory Map (Depth 2)】\n${projectMapLines.join('\n')}` 
+      : '';
+
+    const projectMemory = getProjectMemory() + ragContext + projectMapContext;
     const finalSystemPrompt = projectMemory
       ? systemPrompt + `\n\nProject Memory (Strictly follow these rules):\n${projectMemory}`
       : systemPrompt;

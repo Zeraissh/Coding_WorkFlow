@@ -5,6 +5,7 @@ import { search } from 'duck-duck-scrape';
 import * as path from 'path';
 import { fslock } from '../core/fslock';
 import { workflowEvents } from '../core/events';
+import { ProjectIndexer } from '../core/indexer';
 
 const execAsync = promisify(exec);
 
@@ -65,11 +66,35 @@ export const builtinTools = [
       },
       required: ['dirPath']
     }
+  },
+  {
+    name: 'semantic_code_search',
+    description: 'Search for code snippets based on semantic meaning using local embeddings.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'The semantic query, e.g., "where is the orchestrator initialized?"' },
+        topK: { type: 'number', description: 'Number of results to return, default 3' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    name: 'grep_search',
+    description: 'Search for a string pattern across files in the project. Returns file paths and line numbers.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'The regex pattern or string to search for' },
+        dirPath: { type: 'string', description: 'Directory path to start search, use . for project root' }
+      },
+      required: ['pattern', 'dirPath']
+    }
   }
 ];
 
 // Helper to recursively list files safely
-function safeListDir(dir: string, maxDepth: number, currentDepth = 1): string[] {
+export function safeListDir(dir: string, maxDepth: number, currentDepth = 1): string[] {
   if (currentDepth > maxDepth) return [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   const results: string[] = [];
@@ -83,6 +108,51 @@ function safeListDir(dir: string, maxDepth: number, currentDepth = 1): string[] 
       results.push(`[FILE] ${fullPath}`);
     }
   }
+  return results;
+}
+
+function nativeGrep(dir: string, pattern: string): string[] {
+  const results: string[] = [];
+  let regex: RegExp;
+  try {
+    regex = new RegExp(pattern, 'i');
+  } catch (e) {
+    return [`Invalid regex pattern: ${pattern}`];
+  }
+
+  function walk(currentDir: string) {
+    if (results.length >= 100) return; // limit output size
+
+    let entries;
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch { return; }
+
+    for (const entry of entries) {
+      if (['node_modules', '.git', 'dist', 'build', '.workflow'].includes(entry.name)) continue;
+      
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else {
+        const ext = path.extname(entry.name);
+        if (['.ts', '.js', '.json', '.md', '.css', '.html', '.py', '.c', '.cpp', '.h'].includes(ext)) {
+          try {
+            const content = fs.readFileSync(fullPath, 'utf-8');
+            const lines = content.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              if (line && regex.test(line)) {
+                results.push(`[${fullPath}:${i+1}] ${line.trim().substring(0, 150)}`);
+                if (results.length >= 100) break;
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+  }
+  walk(dir);
   return results;
 }
 
@@ -128,12 +198,25 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
       case 'list_dir':
         try {
           const depth = args.depth || 2;
-          const targetDir = path.resolve(args.dirPath);
+          const targetDir = path.resolve(args.dirPath || '.');
           const lines = safeListDir(targetDir, depth);
           return lines.length > 0 ? lines.join('\n') : 'Directory is empty or all contents were ignored.';
         } catch (e: any) {
           return `Failed to list directory: ${e.message}`;
         }
+      case 'semantic_code_search': {
+        const indexer = new ProjectIndexer();
+        await indexer.scanAndIndex();
+        const results = await indexer.search(args.query, args.topK || 3);
+        if (results.length === 0) return 'No semantically related code found.';
+        return results.map(r => `// File: ${r.file}\n// Starts at Line: ${r.startLine}\n${r.content}`).join('\n\n');
+      }
+      case 'grep_search': {
+        const targetDir = path.resolve(args.dirPath || '.');
+        const results = nativeGrep(targetDir, args.pattern);
+        if (results.length === 0) return `No matches found for "${args.pattern}"`;
+        return results.join('\n');
+      }
       default:
         throw new Error(`Unknown builtin tool: ${name}`);
     }
