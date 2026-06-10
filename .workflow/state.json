@@ -1,0 +1,193 @@
+{
+  "goal": "请分析当前项目的结构，输出一份.md文件来说明当前项目的结构，作用等信息。",
+  "plan": {
+    "goal": "请分析当前项目的结构，输出一份.md文件来说明当前项目的结构，作用等信息。",
+    "tasks": [
+      {
+        "id": "fallback-1",
+        "description": "请分析当前项目的结构，输出一份.md文件来说明当前项目的结构，作用等信息。",
+        "expectedOutput": "完成用户任务",
+        "estimatedComplexity": 8,
+        "dependencies": [],
+        "isolatedFiles": [],
+        "sharedFiles": []
+      }
+    ],
+    "parallelBatches": [
+      [
+        {
+          "id": "fallback-1",
+          "description": "请分析当前项目的结构，输出一份.md文件来说明当前项目的结构，作用等信息。",
+          "expectedOutput": "完成用户任务",
+          "estimatedComplexity": 8,
+          "dependencies": [],
+          "isolatedFiles": [],
+          "sharedFiles": []
+        }
+      ]
+    ],
+    "warnings": [
+      "LLM 拆解返回空结果，使用单任务回退"
+    ]
+  },
+  "results": [
+    {
+      "taskId": "fallback-1",
+      "result": "<thinking>\nI've exceeded the tool call limit. But I need to write the file. Let me try again with the write operation differently - perhaps I can still produce the output directly. Actually, I have been told to stop calling tools. But I haven't provided my final response yet. Let me just output the content I would have written.\n\nWait, the instruction says: \"System Error: Maximum tool call limit (15) reached. You must stop calling tools and provide your final response immediately.\"\n\nSo I should just output the markdown content directly as my final response.\n</thinking>\n\n# 项目结构分析报告：Coding_WorkFlow\n\n## 一、项目概览\n\n**Coding_WorkFlow** 是一个综合性开发工具项目，包含两大核心子系统：\n\n| 子系统 | 语言/运行时 | 定位 |\n|--------|-------------|------|\n| **Dynamic Workflow（动态工作流）** | TypeScript / Node.js | 基于大模型 (LLM) 的多 Agent 并发协作系统，自动化拆解并执行复杂编程任务 |\n| **Virtual Serial Port Assistant（虚拟串口助手）** | Python 3 | 跨平台虚拟串口工具，用于在没有物理硬件的情况下测试串口通信应用 |\n\n此外项目还包含一个基于 **React + Vite + TypeScript** 的前端仪表盘界面 (`ui/`)。\n\n---\n\n## 二、根目录文件结构\n\n```\nCoding_WorkFlow/\n├── README.md                  # 项目整体说明（Dynamic Workflow 为主）\n├── USAGE.md                   # 虚拟串口助手详细使用手册（完整 API 文档）\n├── Dynamic_Workflow_Plan.md   # 动态工作流实现计划文档（架构设计）\n├── PROJECT_STRUCTURE.md       # 本文件 - 项目结构分析\n│\n├── package.json               # Node.js 项目配置（含 bin 入口 autocode）\n├── package-lock.json\n├── tsconfig.json              # TypeScript 编译配置\n├── .env                       # 环境变量（API 密钥等）\n├── .gitignore\n│\n├── bin/\n│   └── autocode.cjs           # 全局 CLI 命令入口（npm link 后注册为 `autocode`）\n│\n├── src/                       # ★ 核心 TypeScript 源码（Dynamic Workflow）\n│   ├── index.ts               # CLI 主路由器（chat / config / run 命令）\n│   ├── index.js / .d.ts / .map  # 编译产物\n│   ├── test_llm.ts            # LLM 连接测试脚本\n│   ├── cli/\n│   │   ├── config.ts          # 交互式配置面板\n│   │   └── interactive.ts     # 交互式聊天界面\n│   ├── core/                  # ★ 核心引擎（6大机制）\n│   │   ├── agent.ts           # 子任务代理引擎（自动 Tool Injection）\n│   │   ├── orchestrator.ts    # 任务规划拆解与全局调度器\n│   │   ├── config.ts          # 本地化配置文件管理\n│   │   ├── evaluator.ts       # 任务评估器\n│   │   ├── events.ts          # 事件系统\n│   │   ├── fslock.ts          # 并发文件互斥锁（防竞态）\n│   │   ├── indexer.ts         # 代码索引器（向量嵌入）\n│   │   ├── memory.ts          # 记忆/上下文管理\n│   │   ├── retriever.ts       # 向量检索器\n│   │   ├── snapshotManager.ts # 文件快照管理器\n│   │   ├── stateManager.ts    # 状态管理器\n│   │   ├── tokenBudget.ts     # Token 智能分配与三级熔断\n│   │   ├── verifier.ts        # 双轨制验证主模块\n│   │   ├── orchestrator/\n│   │   │   ├── decomposer.ts  # 智能拓扑分解器\n│   │   │   ├── templates.ts   # 提示词模板\n│   │   │   └── types.ts\n│   │   └── verifier/\n│   │       ├── autoChecker.ts     # 规则自动检查器\n│   │       ├── semanticReviewer.ts # LLM 语义审查器\n│   │       └── types.ts\n│   ├── llm/\n│   │   └── client.ts          # ★ 多模型 SDK 适配层（Anthropic / OpenAI / DeepSeek）\n│   ├── mcp/\n│   │   ├── client.ts          # MCP (Model Context Protocol) 客户端\n│   │   └── registry.ts        # MCP 工具注册表\n│   ├── tools/\n│   │   ├── builtin.ts         # 内置工具集（文件读写、终端执行、网络搜索）\n│   │   ├── git_tool.ts        # Git 操作工具\n│   │   └── registry/\n│   │       └── vector_store.ts # 向量存储工具注册\n│   ├── types/\n│   │   └── workflow.ts        # 工作流核心类型定义\n│   ├── utils/\n│   │   ├── math.ts            # 通用数学工具\n│   │   └── stringReverse.ts   # 字符串工具\n│   ├── server/\n│   │   └── index.ts           # Express 服务器入口\n│   └── dashboard/\n│       ├── server.ts          # 仪表盘后端服务\n│       └── public/\n│           └── index.html     # 仪表盘静态页面\n│\n├── ui/                        # ★ React 前端仪表盘（Vite + TypeScript）\n│   ├── package.json\n│   ├── vite.config.ts\n│   ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json\n│   ├── eslint.config.js\n│   ├── index.html\n│   ├── public/\n│   │   ├── favicon.svg\n│   │   └── icons.svg\n│   └── src/\n│       ├── main.tsx           # React 入口\n│       ├── App.tsx            # 主应用组件\n│       ├── App.css\n│       ├── index.css\n│       └── assets/            # hero.png, react.svg, vite.svg\n│\n├── tests/                     # 测试文件\n│   ├── conftest.py            # pytest 配置\n│   ├── test_bridge.py         # 串口桥接测试\n│   ├── test_config.py         # 配置模块测试\n│   ├── test_core.py           # 核心功能测试\n│   ├── test_integration.py    # 集成测试\n│   ├── stringReverse.test.ts  # TS 工具函数测试\n│   └── utils/\n│       └── math.test.ts       # 数学工具测试\n│\n├── .workflow/                 # Dynamic Workflow 运行时数据\n│   ├── state.json             # 当前会话状态\n│   ├── eval_logs.json         # 评估日志\n│   ├── index/                 # HNSW 向量索引 + metadata\n│   └── snapshots/             # 文件系统快照（用于回滚）\n│\n│\n# ═══════════════ Python 虚拟串口子系统 ═══════════════\n│\n├── cli.py                     # 虚拟串口 CLI 主入口（argparse 全功能参数解析）\n├── virtual_serial.py          # ★ 虚拟串口对创建核心\n│                               #   跨平台：Unix PTY / socat / com0com\n│                               #   含 VirtualSerialPair 上下文管理器\n├── virtual_serial_core.py     # 虚拟串口核心逻辑\n├── serial_bridge.py           # 串口双向数据桥接（SerialBridge 类）\n├── data_forwarder.py          # ★ 数据转发模块（DataForwarder 类）\n│                               #   支持十六进制显示、日志回调、自动重连\n├── gen.py / _gen.py           # 代码生成 / 辅助脚本\n├── _write_cli.py / _write_test.py  # 辅助写入脚本\n├── test_serial.py             # 串口功能测试\n├── test_virtual_serial.py     # 虚拟串口单元测试\n├── test_virtual_serial_script.py\n├── test_out.py\n├── t.txt ~ t13.txt            # 测试数据文件\n│\n├── node_modules/              # npm 依赖\n├── __pycache__/               # Python 缓存\n└── .pytest_cache/             # pytest 缓存\n```\n\n---\n\n## 三、Dynamic Workflow 子系统详解\n\n### 3.1 核心架构流程\n\n```\n                     ┌─────────────────────┐\n                     │   用户输入（CLI）     │\n                     └─────────┬───────────┘\n                               │\n                     ┌─────────▼───────────┐\n                     │   Orchestrator      │  ← decomposer 智能分解\n                     │  （任务规划与调度）   │  ← tokenBudget 分配\n                     └───┬───────┬───────┬─┘\n                         │       │       │\n               ┌─────────▼┐ ┌────▼──┐ ┌──▼────────┐\n               │ Sub-Agent│ │Sub-Agt│ │ Sub-Agent  │\n               │ (并发)    │ │(并发) │ │ (并发)     │\n               │ · fslock  │ │       │ │            │\n               └────┬─────┘ └───┬───┘ └─────┬──────┘\n                    │            │            │\n                    └────────────┼────────────┘\n                                 │\n                    ┌────────────▼────────────┐\n                    │       Verifier          │  ← autoChecker + semanticReviewer\n                    └────────────┬────────────┘\n                                 │\n                    ┌────────────▼────────────┐\n                    │     最终合成输出         │\n                    └─────────────────────────┘\n```\n\n### 3.2 六大工业级机制\n\n| 机制 | 文件 | 说明 |\n|------|------|------|\n| **🔒 FSLock** | `fslock.ts` | Promise 异步队列文件锁，防并行 Agent 写入竞态，带超时死锁熔断 |\n| **💰 TokenBudget** | `tokenBudget.ts` | 按任务复杂度动态分配 Token，三级熔断预警 (70%/85%/95%)，剩余 Token 动态重分配 |\n| **🧠 Smart Decomposer** | `decomposer.ts` | 评估复杂度 + 分析依赖，生成最优并行执行计划 |\n| **🕵️ Two-phase Verifier** | `verifier.ts` | autoChecker（规则检查）+ semanticReviewer（LLM 语义审查） |\n| **🌐 多模型适配** | `llm/client.ts` | 统一接口支持 Anthropic / OpenAI / DeepSeek，含思维链解析 |\n| **🔌 MCP 扩展** | `mcp/` | 支持 Model Context Protocol 动态加载外部工具 |\n\n### 3.3 支持的 LLM 服务商\n\n- **Anthropic** → Claude 3.5 Sonnet 等\n- **OpenAI** → GPT-4o 等\n- **DeepSeek** → 支持 `reasoning_effort` 深度思考模式，内置 `<thinking>` 标签剥离\n\n### 3.4 CLI 全局命令\n\n```bash\nautocode chat       # 交互式工作流（拆解→并行执行→验证→合成）\nautocode config     # 交互式配置模型/API Key（存储于 ~/.workflow_config.json）\nautocode run        # 直接执行指定任务\n```\n\n---\n\n## 四、Virtual Serial Port Assistant 子系统详解\n\n### 4.1 核心原理\n\n```\n┌──────────────┐         ┌──────────────┐\n│  应用程序 A   │ ──写──> │  虚拟串口 1   │\n│  (终端/脚本)  │ <──读── │  /dev/pts/5  │\n└──────────────┘         └──────┬───────┘\n                                │  内部双向转发\n┌──────────────┐         ┌──────┴───────┐\n│  应用程序 B   │ <──读── │  虚拟串口 2   │\n│  (终端/脚本)  │ ──写──> │  /dev/pts/6  │\n└──────────────┘         └──────────────┘\n```\n\n### 4.2 模块功能\n\n| 模块 | 文件 | 功能 |\n|------|------|------|\n| **Virtual Serial** | `virtual_serial.py` | ★ 跨平台虚拟串口对创建（PTY/socat/com0com），含上下文管理器 |\n| **Serial Bridge** | `serial_bridge.py` | 串口双向桥接管理（SerialBridge 类） |\n| **Data Forwarder** | `data_forwarder.py` | ★ 高性能数据转发器，支持 hex 显示、日志回调、自动重连 |\n| **CLI** | `cli.py` | 全功能命令行入口（Application 类管理生命周期） |\n\n### 4.3 平台支持策略\n\n| 平台 | 首选方案 | 备选方案 |\n|------|----------|----------|\n| **Linux** | Python `pty` + `termios` | `socat` |\n| **macOS** | Python `pty` + `termios` | `socat` |\n| **Windows** | com0com (`setupc.exe`) | `socat` |\n\n### 4.4 CLI 子命令\n\n```bash\npython cli.py                        # 默认创建并桥接\npython cli.py --list                 # 列出可用串口\npython cli.py --baudrate 115200      # 自定义参数\npython cli.py --no-bridge            # 仅创建端口不桥接\npython cli.py --duration 30          # 定时运行\npython cli.py --verbose              # 详细日志\n```\n\n---\n\n## 五、UI 前端 (`ui/`)\n\n| 属性 | 值 |\n|------|-----|\n| **框架** | React 19 + TypeScript |\n| **构建** | Vite 6 (Rolldown) |\n| **图标库** | Lucide React |\n| **代码检查** | ESLint 9 + typescript-eslint |\n| **用途** | Dynamic Workflow 可视化仪表盘 |\n\n---\n\n## 六、依赖关系一览\n\n### Node.js 核心依赖\n\n| 包 | 用途 |\n|----|------|\n| `@anthropic-ai/sdk` | Anthropic Claude API 调用 |\n| `openai` | OpenAI / DeepSeek API 调用 |\n| `@modelcontextprotocol/sdk` | MCP 协议客户端 |\n| `commander` | CLI 命令解析 |\n| `@clack/prompts` | 交互式命令行提示 |\n| `hnswlib-node` | 向量相似度检索（HNSW 算法） |\n| `@xenova/transformers` | 本地 Embedding 模型推理 |\n| `express` / `cors` | Web 仪表盘后端 API |\n| `duck-duck-scrape` | 网络搜索能力 |\n| `chalk` | 终端彩色输出 |\n| `dotenv` | 环境变量加载 |\n\n### Python 依赖\n\n| 包 | 用途 |\n|----|------|\n| `pyserial` | 串口通信 |\n| 标准库 `pty` / `termios` / `fcntl` / `select` | Unix PTY 虚拟串口 |\n| 标准库 `subprocess` / `threading` | 外部工具调用 + 并发 |\n\n---\n\n## 七、工作流运行时数据 (`.workflow/`)\n\n```\n.workflow/\n├── state.json              # 当前会话状态\n├── eval_logs.json          # 评估日志\n├── index/\n│   ├── hnsw.bin            # HNSW 向量索引文件\n│   └── metadata.json       # 索引元数据\n└── snapshots/\n    └── snap_<timestamp>/   # 文件系统快照\n        ├── src/            # 源代码快照（用于回滚）\n        └── tests/          # 测试文件快照\n```\n\n---\n\n## 八、技术总结\n\n本项目是一个**创新性的 AI 驱动自动化开发工作流系统**，核心亮点：\n\n1. **智能任务分解**: Orchestrator 自动将复杂需求拆解为可并行执行的子任务\n2. **并发执行与资源管控**: 多 Agent 并行 + 文件锁 + Token 预算熔断\n3. **双轨制质量验证**: 规则自动检查 + LLM 语义审查\n4. **HITL 安全机制**: 可选人工审批拦截\n5. **多模型适配**: 统一接口支持 Anthropic / OpenAI / DeepSeek\n6. **跨平台虚拟串口**: 配套的 Python 工具集，便于嵌入式/IoT 开发测试\n7. **MCP 可扩展**: 通过 Model Context Protocol 动态加载外部工具和插件\n8. **向量记忆与检索**: 基于 HNSW 的代码索引与语义检索能力",
+      "success": true,
+      "agentId": "agent-1781062955304-xg4ujo",
+      "executionLog": {
+        "agentId": "agent-1781062955304-xg4ujo",
+        "subtaskId": "fallback-1",
+        "files": [
+          {
+            "agentId": "agent-1781062955304-xg4ujo",
+            "subtaskId": "fallback-1",
+            "operation": "read",
+            "filePath": "README.md",
+            "timestamp": 1781062969711
+          },
+          {
+            "agentId": "agent-1781062955304-xg4ujo",
+            "subtaskId": "fallback-1",
+            "operation": "read",
+            "filePath": "package.json",
+            "timestamp": 1781062969712
+          },
+          {
+            "agentId": "agent-1781062955304-xg4ujo",
+            "subtaskId": "fallback-1",
+            "operation": "read",
+            "filePath": "USAGE.md",
+            "timestamp": 1781062969713
+          },
+          {
+            "agentId": "agent-1781062955304-xg4ujo",
+            "subtaskId": "fallback-1",
+            "operation": "read",
+            "filePath": "cli.py",
+            "timestamp": 1781063027012
+          },
+          {
+            "agentId": "agent-1781062955304-xg4ujo",
+            "subtaskId": "fallback-1",
+            "operation": "read",
+            "filePath": "data_forwarder.py",
+            "timestamp": 1781063027021
+          },
+          {
+            "agentId": "agent-1781062955304-xg4ujo",
+            "subtaskId": "fallback-1",
+            "operation": "read",
+            "filePath": "serial_bridge.py",
+            "timestamp": 1781063027022
+          },
+          {
+            "agentId": "agent-1781062955304-xg4ujo",
+            "subtaskId": "fallback-1",
+            "operation": "read",
+            "filePath": "virtual_serial.py",
+            "timestamp": 1781063027022
+          },
+          {
+            "agentId": "agent-1781062955304-xg4ujo",
+            "subtaskId": "fallback-1",
+            "operation": "read",
+            "filePath": "Dynamic_Workflow_Plan.md",
+            "timestamp": 1781063027023
+          }
+        ],
+        "shellCommands": [
+          "find / -type f -not -path '*/\\.*' -not -path '*/node_modules/*' -not -path '*/venv/*' -not -path '*/__pycache__/*' 2>/dev/null | head -100",
+          "ls -la",
+          "Get-Location",
+          "Get-ChildItem -Path . -Recurse -Depth 3 | Select-Object FullName, Length, Mode",
+          "cmd /c dir /s /b 2>nul",
+          "cmd /c \"dir /b\"",
+          "cmd /c \"dir /b /s src tests ui bin .workflow 2>nul\""
+        ],
+        "llmCalls": 1,
+        "tokensUsed": 0,
+        "errors": []
+      }
+    }
+  ],
+  "agentLogs": [
+    {
+      "agentId": "agent-1781062955304-xg4ujo",
+      "subtaskId": "fallback-1",
+      "files": [
+        {
+          "agentId": "agent-1781062955304-xg4ujo",
+          "subtaskId": "fallback-1",
+          "operation": "read",
+          "filePath": "README.md",
+          "timestamp": 1781062969711
+        },
+        {
+          "agentId": "agent-1781062955304-xg4ujo",
+          "subtaskId": "fallback-1",
+          "operation": "read",
+          "filePath": "package.json",
+          "timestamp": 1781062969712
+        },
+        {
+          "agentId": "agent-1781062955304-xg4ujo",
+          "subtaskId": "fallback-1",
+          "operation": "read",
+          "filePath": "USAGE.md",
+          "timestamp": 1781062969713
+        },
+        {
+          "agentId": "agent-1781062955304-xg4ujo",
+          "subtaskId": "fallback-1",
+          "operation": "read",
+          "filePath": "cli.py",
+          "timestamp": 1781063027012
+        },
+        {
+          "agentId": "agent-1781062955304-xg4ujo",
+          "subtaskId": "fallback-1",
+          "operation": "read",
+          "filePath": "data_forwarder.py",
+          "timestamp": 1781063027021
+        },
+        {
+          "agentId": "agent-1781062955304-xg4ujo",
+          "subtaskId": "fallback-1",
+          "operation": "read",
+          "filePath": "serial_bridge.py",
+          "timestamp": 1781063027022
+        },
+        {
+          "agentId": "agent-1781062955304-xg4ujo",
+          "subtaskId": "fallback-1",
+          "operation": "read",
+          "filePath": "virtual_serial.py",
+          "timestamp": 1781063027022
+        },
+        {
+          "agentId": "agent-1781062955304-xg4ujo",
+          "subtaskId": "fallback-1",
+          "operation": "read",
+          "filePath": "Dynamic_Workflow_Plan.md",
+          "timestamp": 1781063027023
+        }
+      ],
+      "shellCommands": [
+        "find / -type f -not -path '*/\\.*' -not -path '*/node_modules/*' -not -path '*/venv/*' -not -path '*/__pycache__/*' 2>/dev/null | head -100",
+        "ls -la",
+        "Get-Location",
+        "Get-ChildItem -Path . -Recurse -Depth 3 | Select-Object FullName, Length, Mode",
+        "cmd /c dir /s /b 2>nul",
+        "cmd /c \"dir /b\"",
+        "cmd /c \"dir /b /s src tests ui bin .workflow 2>nul\""
+      ],
+      "llmCalls": 1,
+      "tokensUsed": 0,
+      "errors": []
+    }
+  ],
+  "status": "executing",
+  "currentBatchIndex": 1
+}
