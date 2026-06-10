@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import { search } from 'duck-duck-scrape';
 import { fslock } from '../core/fslock';
+import { workflowEvents } from '../core/events';
 
 const execAsync = promisify(exec);
 
@@ -77,6 +78,11 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
         } else {
           fs.writeFileSync(args.path, args.content, 'utf-8');
         }
+        
+        if (args.path.endsWith('.html') || args.path.endsWith('.css') || args.path.endsWith('.js')) {
+          workflowEvents.emit('previewUpdated', { path: args.path });
+        }
+        
         return `Successfully wrote to ${args.path}`;
       }
       case 'search_web':

@@ -7,10 +7,10 @@
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 20px; color: #3f3f46; }
     h1 { font-size: 1.5rem; color: #18181b; }
-    .container { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .panel { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .panel h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid #e4e4e7; padding-bottom: 10px; }
-    .log-box { height: 400px; overflow-y: auto; background: #18181b; color: #a1a1aa; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; }
+    .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 300px 1fr 400px; gap: 20px; }
+    .panel { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+    .panel h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid #e4e4e7; padding-bottom: 10px; flex-shrink: 0; }
+    .log-box { flex-grow: 1; overflow-y: auto; background: #18181b; color: #a1a1aa; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; min-height: 400px; }
     .log-entry { margin-bottom: 4px; }
     .log-entry.info { color: #3b82f6; }
     .log-entry.warn { color: #f59e0b; }
@@ -21,6 +21,9 @@
     .task-item.running { border-left: 4px solid #3b82f6; background-color: #eff6ff; }
     .task-item.completed { border-left: 4px solid #10b981; }
     .task-id { font-weight: bold; font-size: 0.85rem; color: #71717a; }
+    
+    .preview-box { flex-grow: 1; border: 1px solid #e4e4e7; border-radius: 6px; overflow: hidden; background: #fff; min-height: 400px; }
+    .preview-iframe { width: 100%; height: 100%; border: none; }
     
     /* Modal styles */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
@@ -35,7 +38,7 @@
   </style>
 </head>
 <body>
-  <div style="max-width: 1000px; margin: 0 auto 20px auto;">
+  <div style="max-width: 1400px; margin: 0 auto 20px auto;">
     <h1>AutoCode Workflow Dashboard</h1>
     <p id="goal-text">Waiting for workflow to start...</p>
   </div>
@@ -46,6 +49,12 @@
       <ul class="task-list" id="task-list">
         <!-- Tasks will be injected here -->
       </ul>
+    </div>
+    <div class="panel">
+      <h2>Live Preview</h2>
+      <div class="preview-box">
+        <iframe id="preview-iframe" class="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
     </div>
     <div class="panel">
       <h2>Logs</h2>
@@ -143,6 +152,24 @@
       }
       else if (type === 'workflowCompleted') {
         appendLog(`[${timeStr}] Workflow Completed!`, 'success');
+      }
+      else if (type === 'previewUpdated') {
+        const iframe = document.getElementById('preview-iframe');
+        // Convert local absolute path to workspace relative path if possible
+        let srcPath = payload.path;
+        if (srcPath.startsWith('/')) {
+           srcPath = srcPath.split('/').pop();
+        } else if (srcPath.includes('\\')) {
+           srcPath = srcPath.split('\\').pop();
+        }
+        
+        // Ensure it has .html
+        if (srcPath.endsWith('.html')) {
+          iframe.src = '/workspace/' + srcPath + '?t=' + Date.now();
+        } else if (iframe.src) {
+          // If it's css or js, just reload the current iframe
+          iframe.src = iframe.src.split('?')[0] + '?t=' + Date.now();
+        }
       }
       else if (type === 'log') {
         let msgType = 'default';

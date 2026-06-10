@@ -11,9 +11,12 @@ export class DashboardServer {
     this.app = express();
     this.app.use(express.json());
     
-    // Serve static files
+    // Serve static files for Dashboard
     const publicPath = path.join(process.cwd(), 'src', 'dashboard', 'public');
     this.app.use(express.static(publicPath));
+
+    // Serve workspace files for Live Preview Sandbox
+    this.app.use('/workspace', express.static(process.cwd()));
 
     // SSE Endpoint
     this.app.get('/events', (req, res) => {
@@ -85,6 +88,7 @@ export class DashboardServer {
     workflowEvents.on('taskCompleted', (data) => this.broadcast('taskCompleted', data));
     workflowEvents.on('workflowCompleted', (data) => this.broadcast('workflowCompleted', data));
     workflowEvents.on('log', (data) => this.broadcast('log', data));
+    workflowEvents.on('previewUpdated', (data) => this.broadcast('previewUpdated', data));
   }
 
   public start(port: number = 3000) {
