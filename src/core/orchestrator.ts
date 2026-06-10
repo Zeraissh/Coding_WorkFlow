@@ -15,6 +15,7 @@ import { gitCreateBranch, gitCommitAll } from '../tools/git_tool';
 import { ProjectIndexer } from './indexer';
 import { StateManager, WorkflowState } from './stateManager';
 import { SnapshotManager } from './snapshotManager';
+import { MCPRegistry } from '../mcp/registry';
 
 export class Orchestrator {
   private decomposer: Decomposer;
@@ -203,6 +204,9 @@ Return ONLY valid JSON.`;
       workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Creating atomic snapshot backup...' });
       snapshotManager.createSnapshot();
     }
+
+    workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Initializing Global MCP Ecosystem...' });
+    await MCPRegistry.getInstance().init();
 
     const retriever = new ToolRetriever();
     await retriever.init();

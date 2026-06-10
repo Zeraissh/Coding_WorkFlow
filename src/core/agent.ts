@@ -7,6 +7,7 @@ import { Tool } from '@anthropic-ai/sdk/resources/messages.js';
 import { fslock } from './fslock';
 import { tokenBudget } from './tokenBudget';
 import { getProjectMemory } from './memory';
+import { MCPRegistry } from '../mcp/registry';
 
 export class SubAgent {
   private agentId: string;
@@ -111,6 +112,15 @@ Please provide the best possible output for this sub-task.`;
             anthropicTools.push(mTool);
             toolExecutors.set(mTool.name, async (args) => client.callTool(mTool.name, args));
           }
+        }
+      }
+
+      // 3. Inject global MCP ecosystem tools
+      const globalTools = MCPRegistry.getInstance().getGlobalTools();
+      for (const mTool of globalTools) {
+        if (!toolExecutors.has(mTool.name)) {
+          anthropicTools.push(mTool);
+          toolExecutors.set(mTool.name, async (args) => MCPRegistry.getInstance().callTool(mTool.name, args));
         }
       }
 
