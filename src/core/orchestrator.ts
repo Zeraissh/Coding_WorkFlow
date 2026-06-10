@@ -264,6 +264,31 @@ Return ONLY valid JSON.`;
     const verifier = new Verifier();
     const finalOutput = await verifier.verifyAndSynthesize(plan, results, agentLogs);
 
+    // --- Human-in-the-Loop Review ---
+    const { gitDiffCheck } = await import('../tools/git_tool');
+    const diffText = await gitDiffCheck();
+    if (diffText && diffText.trim().length > 0) {
+      workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Waiting for User Approval via Dashboard...' });
+      
+      const approved = await new Promise<boolean>((resolve) => {
+        const handler = (data: { taskId: string, approved: boolean }) => {
+          if (data.taskId === 'orchestrator') {
+            workflowEvents.off('dashboardApproval', handler);
+            resolve(data.approved);
+          }
+        };
+        workflowEvents.on('dashboardApproval', handler);
+        workflowEvents.emit('reviewRequested', { taskId: 'orchestrator', diff: diffText });
+      });
+
+      if (!approved) {
+        workflowEvents.emit('log', { taskId: 'orchestrator', message: 'User rejected the changes.' });
+        workflowEvents.emit('workflowCompleted', { result: 'User rejected the changes. Check the log and rerun.' });
+        stateManager.clearState();
+        return 'Workflow rejected by user.';
+      }
+    }
+
     // --- Git Committing ---
     workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Committing changes to git...' });
     const commitMsg = `feat: ${plan.goal.substring(0, 50)}\n\n${finalOutput.substring(0, 200)}...`;

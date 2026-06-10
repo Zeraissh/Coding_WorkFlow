@@ -21,6 +21,17 @@
     .task-item.running { border-left: 4px solid #3b82f6; background-color: #eff6ff; }
     .task-item.completed { border-left: 4px solid #10b981; }
     .task-id { font-weight: bold; font-size: 0.85rem; color: #71717a; }
+    
+    /* Modal styles */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: white; width: 80%; max-width: 800px; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .modal h2 { margin-top: 0; }
+    .diff-box { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; overflow-x: auto; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+    .btn-group { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .btn-approve { background: #10b981; color: white; }
+    .btn-reject { background: #ef4444; color: white; }
   </style>
 </head>
 <body>
@@ -39,6 +50,18 @@
     <div class="panel">
       <h2>Logs</h2>
       <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="review-modal">
+    <div class="modal">
+      <h2>Code Review Required</h2>
+      <p>The workflow has completed generating the code. Please review the changes before committing.</p>
+      <div class="diff-box" id="diff-content"></div>
+      <div class="btn-group">
+        <button class="btn btn-reject" onclick="submitReview(false)">Reject</button>
+        <button class="btn btn-approve" onclick="submitReview(true)">Accept & Commit</button>
+      </div>
     </div>
   </div>
 
@@ -70,6 +93,19 @@
       }
     }
 
+    let currentReviewTaskId = null;
+    function submitReview(approved) {
+      if (!currentReviewTaskId) return;
+      fetch('/api/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: currentReviewTaskId, approved })
+      }).then(() => {
+        document.getElementById('review-modal').classList.remove('active');
+        appendLog(`[Dashboard] You have ${approved ? 'approved' : 'rejected'} the changes.`, 'info');
+      });
+    }
+
     const evtSource = new EventSource('/events');
     
     evtSource.onmessage = (event) => {
@@ -92,6 +128,12 @@
           renderTasks();
         }
         appendLog(`[${timeStr}] Task Completed: ${payload.taskId} (Success: ${payload.success})`, payload.success ? 'success' : 'warn');
+      }
+      else if (type === 'reviewRequested') {
+        currentReviewTaskId = payload.taskId;
+        document.getElementById('diff-content').innerText = payload.diff;
+        document.getElementById('review-modal').classList.add('active');
+        appendLog(`[${timeStr}] Review requested. Please check the popup window.`, 'warn');
       }
       else if (type === 'workflowCompleted') {
         appendLog(`[${timeStr}] Workflow Completed!`, 'success');

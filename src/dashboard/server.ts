@@ -9,6 +9,7 @@ export class DashboardServer {
 
   constructor() {
     this.app = express();
+    this.app.use(express.json());
     
     // Serve static files
     const publicPath = path.join(process.cwd(), 'src', 'dashboard', 'public');
@@ -31,6 +32,13 @@ export class DashboardServer {
       req.on('close', () => {
         this.clients = this.clients.filter(c => c !== res);
       });
+    });
+
+    // Handle Human-in-the-Loop Dashboard Approvals
+    this.app.post('/api/approve', (req, res) => {
+      const { taskId, approved } = req.body;
+      workflowEvents.emit('dashboardApproval', { taskId, approved });
+      res.json({ success: true });
     });
 
     this.setupListeners();
