@@ -7,6 +7,9 @@ export interface EvalRecord {
     cachedTokens: number;
     totalLlmCalls: number;
     totalDurationMs: number;
+    cacheHitRate: number;
+    estimatedSavings: number;
+    provider: string;
 }
 export declare class Evaluator {
     private logFile;

@@ -11,7 +11,8 @@ export class Evaluator {
         tokens: 0,
         cachedTokens: 0,
         llmCalls: 0,
-        startTime: 0
+        startTime: 0,
+        provider: ''
     };
     constructor(cwd = process.cwd()) {
         this.logFile = path.join(cwd, '.workflow', 'eval_logs.json');
@@ -37,7 +38,7 @@ export class Evaluator {
     setupListeners() {
         workflowEvents.on('workflowStarted', () => {
             this.currentWorkflowId = `wf_${Date.now()}`;
-            this.currentStats = { tasks: 0, successes: 0, tokens: 0, cachedTokens: 0, llmCalls: 0, startTime: Date.now() };
+            this.currentStats = { tasks: 0, successes: 0, tokens: 0, cachedTokens: 0, llmCalls: 0, startTime: Date.now(), provider: '' };
         });
         workflowEvents.on('taskCompleted', (data) => {
             this.currentStats.tasks++;
@@ -48,9 +49,19 @@ export class Evaluator {
             this.currentStats.tokens += data.tokens;
             this.currentStats.cachedTokens += data.cachedTokens;
             this.currentStats.llmCalls += data.calls;
+            if (data.provider && !this.currentStats.provider) {
+                this.currentStats.provider = data.provider;
+            }
         });
         workflowEvents.on('workflowCompleted', () => {
             if (this.currentWorkflowId) {
+                const totalInputTokens = this.currentStats.tokens;
+                const cacheHitRate = totalInputTokens > 0
+                    ? Math.round((this.currentStats.cachedTokens / Math.max(totalInputTokens, 1)) * 100)
+                    : 0;
+                // 估算节省成本: Anthropic $3/M input tokens, cached $0.30/M → 节省 $2.70/M cached tokens
+                const savingsPerMillion = 2.70;
+                const estimatedSavings = (this.currentStats.cachedTokens / 1_000_000) * savingsPerMillion;
                 this.records.push({
                     timestamp: Date.now(),
                     workflowId: this.currentWorkflowId,
@@ -59,7 +70,10 @@ export class Evaluator {
                     totalTokens: this.currentStats.tokens,
                     cachedTokens: this.currentStats.cachedTokens,
                     totalLlmCalls: this.currentStats.llmCalls,
-                    totalDurationMs: Date.now() - this.currentStats.startTime
+                    totalDurationMs: Date.now() - this.currentStats.startTime,
+                    cacheHitRate,
+                    estimatedSavings: Math.round(estimatedSavings * 100) / 100,
+                    provider: this.currentStats.provider || 'unknown',
                 });
                 this.saveLogs();
                 workflowEvents.emit('evalUpdated', this.getLogs());

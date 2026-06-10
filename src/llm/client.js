@@ -5,6 +5,88 @@ import { workflowEvents } from '../core/events';
 import { GlobalConfig } from '../core/config';
 import { tokenBudget } from '../core/tokenBudget';
 dotenv.config();
+// ============================================================================
+// Singleton LLM Clients — 复用客户端实例，避免每次调用都新建连接
+// ============================================================================
+let _openaiClient = null;
+let _openaiConfigKey = '';
+function getOpenAIClient(config) {
+    const key = `${config.apiKey}:${config.provider}`;
+    if (!_openaiClient || _openaiConfigKey !== key) {
+        _openaiClient = new OpenAI({
+            apiKey: config.apiKey,
+            baseURL: config.provider === 'deepseek' ? 'https://api.deepseek.com' : undefined,
+            maxRetries: 2,
+            timeout: 120000, // 120s timeout — DeepSeek reasoning can be slow
+        });
+        _openaiConfigKey = key;
+    }
+    return _openaiClient;
+}
+let _anthropicClient = null;
+let _anthropicConfigKey = '';
+function getAnthropicClient(config) {
+    const key = config.apiKey;
+    if (!_anthropicClient || _anthropicConfigKey !== key) {
+        _anthropicClient = new Anthropic({ apiKey: config.apiKey });
+        _anthropicConfigKey = key;
+    }
+    return _anthropicClient;
+}
+let _cacheStats = {
+    systemPromptKey: '',
+    toolDefKey: '',
+    hitCount: 0,
+    missCount: 0,
+    totalCachedTokens: 0,
+    totalInputTokens: 0,
+};
+/** 获取当前缓存统计 */
+export function getCacheStats() {
+    return { ..._cacheStats };
+}
+/** 重置缓存统计 */
+export function resetCacheStats() {
+    _cacheStats = {
+        systemPromptKey: '',
+        toolDefKey: '',
+        hitCount: 0,
+        missCount: 0,
+        totalCachedTokens: 0,
+        totalInputTokens: 0,
+    };
+}
+// ============================================================================
+// 报告 Token 用量（统一入口）
+// ============================================================================
+function reportTokenUsage(inputTokens, outputTokens, cachedTokens, agentId, taskId, provider) {
+    const totalTokens = inputTokens + outputTokens;
+    // 更新全局缓存统计
+    _cacheStats.totalCachedTokens += cachedTokens;
+    _cacheStats.totalInputTokens += inputTokens;
+    if (cachedTokens > 0) {
+        _cacheStats.hitCount++;
+    }
+    else if (inputTokens > 0) {
+        _cacheStats.missCount++;
+    }
+    if (totalTokens > 0) {
+        if (agentId)
+            tokenBudget().reportUsage(agentId, totalTokens);
+        workflowEvents.emit('llmUsageReport', {
+            taskId,
+            agentId,
+            tokens: totalTokens,
+            cachedTokens,
+            calls: 1,
+            cacheHitRate: inputTokens > 0 ? Math.round((cachedTokens / inputTokens) * 100) : 0,
+            provider: provider || 'unknown',
+        });
+    }
+}
+// ============================================================================
+// Anthropic ↔ OpenAI 消息格式转换
+// ============================================================================
 function mapAnthropicToolsToOpenAI(tools) {
     if (!tools)
         return undefined;
@@ -125,10 +207,7 @@ export async function askLLM(system, messages, tools, onToolCall, temperature = 
     return await askAnthropic(system, messages, tools, onToolCall, temperature, taskId, agentId, config);
 }
 async function askOpenAI(system, messages, tools, onToolCall, temperature, taskId, agentId, config) {
-    const openai = new OpenAI({
-        apiKey: config.apiKey,
-        baseURL: config.provider === 'deepseek' ? 'https://api.deepseek.com' : undefined
-    });
+    const openai = getOpenAIClient(config);
     const options = {
         model: config.model,
         temperature,
@@ -215,13 +294,10 @@ async function askOpenAI(system, messages, tools, onToolCall, temperature, taskI
         text = `<thinking>\n${reasoning}\n</thinking>\n\n` + text;
     }
     // --- Token 使用上报 ---
-    const totalTokens = (response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0);
+    const inputTokens = response.usage?.prompt_tokens || 0;
+    const outputTokens = response.usage?.completion_tokens || 0;
     const cachedTokens = response.usage?.prompt_tokens_details?.cached_tokens || 0;
-    if (totalTokens > 0) {
-        if (agentId)
-            tokenBudget().reportUsage(agentId, totalTokens);
-        workflowEvents.emit('llmUsageReport', { taskId, agentId, tokens: totalTokens, cachedTokens, calls: 1 });
-    }
+    reportTokenUsage(inputTokens, outputTokens, cachedTokens, agentId, taskId, config.provider);
     return {
         id: response.id,
         type: 'message',
@@ -234,7 +310,7 @@ async function askOpenAI(system, messages, tools, onToolCall, temperature, taskI
     };
 }
 async function askAnthropic(system, messages, tools, onToolCall, temperature, taskId, agentId, config) {
-    const anthropic = new Anthropic({ apiKey: config.apiKey });
+    const anthropic = getAnthropicClient(config);
     const options = {
         model: config.model,
         max_tokens: 4096,
@@ -295,13 +371,10 @@ async function askAnthropic(system, messages, tools, onToolCall, temperature, ta
         }
     }
     // --- Token 使用上报 ---
-    const totalTokens = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+    const inputTokens = response.usage?.input_tokens || 0;
+    const outputTokens = response.usage?.output_tokens || 0;
     const cachedTokens = response.usage?.cache_read_input_tokens || 0;
-    if (totalTokens > 0) {
-        if (agentId)
-            tokenBudget().reportUsage(agentId, totalTokens);
-        workflowEvents.emit('llmUsageReport', { taskId, agentId, tokens: totalTokens, cachedTokens, calls: 1 });
-    }
+    reportTokenUsage(inputTokens, outputTokens, cachedTokens, agentId, taskId, config.provider);
     return response;
 }
 //# sourceMappingURL=client.js.map
