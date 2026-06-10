@@ -11,7 +11,7 @@ export class DashboardServer {
     this.app = express();
     
     // Serve static files
-    const publicPath = path.join(__dirname, 'public');
+    const publicPath = path.join(process.cwd(), 'src', 'dashboard', 'public');
     this.app.use(express.static(publicPath));
 
     // SSE Endpoint
