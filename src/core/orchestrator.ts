@@ -18,6 +18,7 @@ import { beginWorkflowAbortScope, endWorkflowAbortScope, isWorkflowStopped } fro
 import { Clarifier, ClarifyAnswer } from './orchestrator/clarifier';
 import { RuleStore } from './rules';
 import { KnowledgeStore } from './knowledge';
+import { SkillRegistry } from './skills';
 import { SnapshotManager } from './snapshotManager';
 import { MCPRegistry } from '../mcp/registry';
 import { PluginManager } from './pluginManager';
@@ -58,6 +59,8 @@ export class Orchestrator {
   private decomposer: Decomposer;
   private pluginManager: PluginManager;
   private templateManager: TemplateManager;
+  /** 本次工作流命中的 skill（用于结束时回写胜负） */
+  private matchedSkillId: string | null = null;
 
   /**
    * Initializes a new Orchestrator instance. Loads the default decomposer configuration
@@ -214,7 +217,22 @@ export class Orchestrator {
       const requirementsSection = requirementsContext
         ? `\n\n【需求规格（Clarify Phase 产出，分解必须遵循）】\n${requirementsContext}`
         : '';
-      const projectMemory = getProjectMemory() + requirementsSection + ragContext + projectMapContext;
+
+      // --- Skill 匹配：命中的领域上下文包注入分解上下文 ---
+      let skillSection = '';
+      try {
+        const matchedSkill = new SkillRegistry().matchSkill(goal);
+        if (matchedSkill) {
+          this.matchedSkillId = matchedSkill.id;
+          skillSection = `\n\n【Skill: ${matchedSkill.name}（领域经验，遵循其约定）】\n${matchedSkill.promptAddition}`;
+          workflowEvents.emit('skillMatched', { skillId: matchedSkill.id, name: matchedSkill.name });
+          workflowEvents.emit('log', { taskId: 'orchestrator', message: `🧩 Matched skill: ${matchedSkill.name}` });
+        }
+      } catch (e: any) {
+        console.warn(`[orchestrator] Skill matching failed: ${e.message}`);
+      }
+
+      const projectMemory = getProjectMemory() + requirementsSection + skillSection + ragContext + projectMapContext;
       const decomposition = await this.decomposer.decompose(goal, projectMemory);
 
       const tasks: SubTask[] = decomposition.subtasks.map((t) => ({
@@ -480,15 +498,41 @@ Return ONLY valid JSON.`;
     extractLessons(goal, agentLogs).catch(console.error);
 
     // 规则生命周期：成功工作流刷新相关域规则的验证时间，长期未验证的进入待退役
+    const workflowSuccess = results.every(r => r.success);
     try {
       const ruleStore = new RuleStore();
       const corpus = (goal + ' ' + plan.tasks.map(t => t.description).join(' ')).toLowerCase();
       const touchedDomains = [...new Set(
         ruleStore.getActive().flatMap(r => r.domains).filter(d => corpus.includes(d.toLowerCase()))
       )];
-      ruleStore.onWorkflowCompleted(touchedDomains, results.every(r => r.success));
+      ruleStore.onWorkflowCompleted(touchedDomains, workflowSuccess);
     } catch (e: any) {
       console.warn(`[orchestrator] Rule lifecycle pass failed: ${e.message}`);
+    }
+
+    // Skill 胜率闭环：回写命中 skill 的成败；成功的无 skill 目标进入起草观察
+    try {
+      const registry = new SkillRegistry();
+      if (this.matchedSkillId) {
+        registry.recordOutcome(this.matchedSkillId, workflowSuccess);
+        this.matchedSkillId = null;
+      } else if (workflowSuccess) {
+        // fire-and-forget：起草不阻塞工作流收尾
+        registry.considerDraft(goal, async (prompt) => {
+          const response = await askLLM(prompt, [{ role: 'user', content: prompt }], undefined, undefined, 0.3, 'orchestrator');
+          const block = response.content.find(b => b.type === 'text');
+          return (block as any)?.text || '';
+        }).then(draft => {
+          if (draft) {
+            workflowEvents.emit('log', {
+              taskId: 'orchestrator',
+              message: `🧩 Skill draft proposed: "${draft.name}" — review and activate it in .workflow/skills/`,
+            });
+          }
+        }).catch((e: any) => console.warn(`[orchestrator] Skill drafting failed: ${e.message}`));
+      }
+    } catch (e: any) {
+      console.warn(`[orchestrator] Skill outcome pass failed: ${e.message}`);
     }
 
     // --- Human-in-the-Loop Review ---

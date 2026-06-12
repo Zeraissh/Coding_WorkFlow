@@ -53,6 +53,8 @@ export interface EvalRecord {
   verification?: VerificationSummary;
   /** 是否被用户 E-Stop 中止 */
   stopped: boolean;
+  /** 本次命中的 skill id（无命中为 undefined）——支撑 per-skill 胜率归因 */
+  skillId?: string;
 }
 
 function hashRules(cwd: string): string {
@@ -94,6 +96,7 @@ export class Evaluator {
       taskDetails: [] as TaskEvalDetail[],
       verification: undefined as VerificationSummary | undefined,
       stopped: false,
+      skillId: undefined as string | undefined,
     };
   }
 
@@ -173,6 +176,10 @@ export class Evaluator {
       this.currentStats.stopped = true;
     });
 
+    this.on('skillMatched', (data: { skillId: string }) => {
+      this.currentStats.skillId = data.skillId;
+    });
+
     this.on('llmUsageReport', (data: { tokens: number; cachedTokens: number; calls: number; cacheHitRate?: number; provider?: string }) => {
       this.currentStats.tokens += data.tokens;
       this.currentStats.cachedTokens += data.cachedTokens;
@@ -221,6 +228,7 @@ export class Evaluator {
         stopped: this.currentStats.stopped,
       };
       if (this.currentStats.verification) record.verification = this.currentStats.verification;
+      if (this.currentStats.skillId) record.skillId = this.currentStats.skillId;
 
       this.records.push(record);
       this.saveLogs();
