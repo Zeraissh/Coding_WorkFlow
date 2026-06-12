@@ -27,6 +27,7 @@ app.get('/', (req, res) => {
 });
 
 const pendingApprovals = new Map<string, { resolve: () => void, reject: (err: Error) => void }>();
+const pendingClarifications = new Map<string, { resolve: (answers: any[]) => void }>();
 
 let sseClients: any[] = [];
 let eventHistory: { event: string, data: any }[] = [];
@@ -39,13 +40,15 @@ workflowEvents.on('workflowCompleted', (data) => broadcastSSE('workflowCompleted
 workflowEvents.on('llmUsageReport', (data) => broadcastSSE('llmUsageReport', data));
 workflowEvents.on('fileChanged', (data) => broadcastSSE('fileChanged', data));
 workflowEvents.on('workflowStopped', (data) => broadcastSSE('workflowStopped', data));
-// 流式增量不进 eventHistory（量大且回放无意义），只对在线客户端直推
-workflowEvents.on('assistantDelta', (data) => {
-  sseClients.forEach(client => {
-    client.res.write(`event: assistantDelta\n`);
-    client.res.write(`data: ${JSON.stringify(data)}\n\n`);
+// 流式增量/高频指标不进 eventHistory（量大且回放无意义），只对在线客户端直推
+for (const liveEvent of ['assistantDelta', 'focusUpdate']) {
+  workflowEvents.on(liveEvent, (data) => {
+    sseClients.forEach(client => {
+      client.res.write(`event: ${liveEvent}\n`);
+      client.res.write(`data: ${JSON.stringify(data)}\n\n`);
+    });
   });
-});
+}
 workflowEvents.on('approvalRequested', (data) => {
   const reqId = Date.now().toString() + Math.random().toString();
   pendingApprovals.set(reqId, { resolve: data.resolve, reject: data.reject });
@@ -54,6 +57,16 @@ workflowEvents.on('approvalRequested', (data) => {
     toolName: data.toolName, 
     arguments: data.arguments, 
     reqId 
+  });
+});
+
+workflowEvents.on('clarificationRequested', (data) => {
+  const reqId = Date.now().toString() + Math.random().toString();
+  pendingClarifications.set(reqId, { resolve: data.resolve });
+  broadcastSSE('clarificationRequested', {
+    reqId,
+    goal: data.goal,
+    questions: data.questions,
   });
 });
 
@@ -105,6 +118,17 @@ app.get('/api/stream', (req, res) => {
     clearInterval(heartbeat);
     sseClients = sseClients.filter(c => c.id !== clientId);
   });
+});
+
+app.post('/api/clarify', (req, res) => {
+  const { reqId, answers } = req.body;
+  const pending = pendingClarifications.get(reqId);
+  if (!pending) {
+    return res.status(404).json({ error: 'Clarification request not found' });
+  }
+  pending.resolve(Array.isArray(answers) ? answers : []);
+  pendingClarifications.delete(reqId);
+  res.json({ status: 'resolved' });
 });
 
 app.post('/api/stop', (req, res) => {

@@ -15,11 +15,12 @@ import { gitCreateBranch, gitCommitAll } from '../tools/git_tool';
 import { ProjectIndexer } from './indexer';
 import { StateManager, WorkflowState } from './stateManager';
 import { beginWorkflowAbortScope, endWorkflowAbortScope, isWorkflowStopped } from './abort';
+import { Clarifier, ClarifyAnswer } from './orchestrator/clarifier';
 import { SnapshotManager } from './snapshotManager';
 import { MCPRegistry } from '../mcp/registry';
 import { PluginManager } from './pluginManager';
 import { TemplateManager } from './templates';
-import { safeListDir } from '../tools/builtin';
+import { safeListDir, executeBuiltinTool } from '../tools/builtin';
 
 /**
  * Executes a set of async tasks with a maximum concurrency limit.
@@ -99,11 +100,89 @@ export class Orchestrator {
     return { ...DEFAULT_DECOMPOSER_CONFIG };
   }
 
+  /**
+   * Clarify Phase：复杂且模糊的目标先转化为选项式问题，
+   * 答案固化为需求规格（.workflow/requirements.md）作为分解契约。
+   * 返回注入分解上下文的需求规格文本（不触发时返回空串）。
+   */
+  private async runClarifyPhase(goal: string): Promise<string> {
+    const rawConfig = (GlobalConfig.get() as any).clarifyConfig || {};
+    const clarifier = new Clarifier(
+      {
+        callLLM: async (prompt, opts) => {
+          const response = await askLLM(
+            prompt,
+            [{ role: 'user', content: prompt }],
+            undefined, undefined,
+            opts?.temperature ?? 0.2,
+            'orchestrator'
+          );
+          const block = response.content.find(b => b.type === 'text');
+          return (block as any)?.text || '';
+        },
+        searchWeb: async (query) => executeBuiltinTool('search_web', { query }),
+      },
+      rawConfig
+    );
+
+    const assessment = await clarifier.assessGaps(goal);
+    if (!clarifier.needsClarification(assessment)) return '';
+
+    workflowEvents.emit('log', {
+      taskId: 'orchestrator',
+      message: `🔍 Goal is complex (${assessment.complexityEstimate}/10) with gaps [${assessment.missingDimensions.join(', ')}] — entering clarify phase...`,
+    });
+
+    const { questions, researchNotes } = await clarifier.generateQuestions(goal, assessment);
+    if (questions.length === 0) return '';
+
+    let answers: ClarifyAnswer[];
+    const hasInteractiveListener = workflowEvents.listenerCount('clarificationRequested') > 0;
+
+    if (rawConfig.auto || !hasInteractiveListener) {
+      answers = clarifier.autoAnswer(questions);
+      workflowEvents.emit('log', {
+        taskId: 'orchestrator',
+        message: `Auto mode: adopted ${answers.length} recommended options (recorded as assumptions).`,
+      });
+    } else {
+      // 交互模式：CLI / Dashboard 应答，5 分钟无响应降级为 auto
+      answers = await new Promise<ClarifyAnswer[]>((resolve) => {
+        const timer = setTimeout(() => {
+          workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Clarification timed out — falling back to recommended options.' });
+          resolve(clarifier.autoAnswer(questions));
+        }, 5 * 60 * 1000);
+        workflowEvents.emit('clarificationRequested', {
+          goal,
+          questions,
+          resolve: (userAnswers: ClarifyAnswer[]) => {
+            clearTimeout(timer);
+            resolve(userAnswers);
+          },
+        });
+      });
+    }
+
+    const doc = clarifier.buildRequirementsDoc(goal, questions, answers, researchNotes);
+    const savedPath = clarifier.saveRequirementsDoc(doc);
+    workflowEvents.emit('log', { taskId: 'orchestrator', message: `📋 Requirements spec saved to ${savedPath}` });
+
+    return doc;
+  }
+
   async planWorkflow(goal: string): Promise<Plan> {
     const templatePlan = this.templateManager.matchTemplate(goal);
     if (templatePlan) {
       workflowEvents.emit('workflowStarted', { goal });
       return templatePlan;
+    }
+
+    // --- Clarify Phase（模板匹配之后、分解之前） ---
+    let requirementsContext = '';
+    try {
+      requirementsContext = await this.runClarifyPhase(goal);
+    } catch (e: any) {
+      console.warn(`[orchestrator] Clarify phase failed, proceeding without it: ${e.message}`);
     }
 
     // 使用 Decomposer 进行智能拆解
@@ -124,7 +203,10 @@ export class Orchestrator {
         ? `\n\n【Project Directory Map (Depth 2)】\n${projectMapLines.join('\n')}` 
         : '';
 
-      const projectMemory = getProjectMemory() + ragContext + projectMapContext;
+      const requirementsSection = requirementsContext
+        ? `\n\n【需求规格（Clarify Phase 产出，分解必须遵循）】\n${requirementsContext}`
+        : '';
+      const projectMemory = getProjectMemory() + requirementsSection + ragContext + projectMapContext;
       const decomposition = await this.decomposer.decompose(goal, projectMemory);
 
       const tasks: SubTask[] = decomposition.subtasks.map((t) => ({

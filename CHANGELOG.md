@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — P2.5 进化能力（第一批）
+
+### Added
+- **Eval 归因（A.1）**：`EvalRecord` 升级——per-task 明细（成功/错误数/干预次数）、Verifier 结构化验证报告（lint/type/冲突/语义问题计数）、规则集 hash、提示词版本号、E-Stop 标记；新增 `verificationReport` 事件；质量分公式修正为成功率 70% + 验证通过率 30%（缓存命中率不再计入质量）
+- **需求澄清阶段（B）**：`src/core/orchestrator/clarifier.ts`——复杂模糊目标先做缺口评估（复杂度/模糊度/缺失维度/跨层架构），触发后用 `search_web` 调研同类产品与开源项目，生成带推荐项与依据的选项问卷；CLI select / Dashboard 问卷卡双通道 + auto 模式 + 5 分钟超时降级；答案固化为 `.workflow/requirements.md`（含未确认假设清单）注入分解上下文
+- **专注度监控（C.1）**：`src/core/focus.ts`——消费 decomposer 的 isolatedFiles/sharedFiles 声明检测越界写入、同签名调用循环检测、空转检测；refocus 警告回灌 LLM；`focusIntervention` 进 Eval 归因、`focusUpdate` 实时推 Dashboard 任务卡（🎯 分数徽章）
+- 新配置：`clarifyConfig`、`focusConfig`；Evaluator 新增 `dispose()`
+
 ## [Unreleased] — P2 核心竞争力
 
 ### Added

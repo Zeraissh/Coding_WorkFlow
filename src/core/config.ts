@@ -33,11 +33,28 @@ export interface BudgetModuleConfig {
   };
 }
 
+export interface ClarifierModuleConfig {
+  enabled: boolean;
+  /** 自动采用推荐项（无人值守），不阻塞等待用户 */
+  auto: boolean;
+  complexityThreshold: number;
+  maxQuestions: number;
+  enableResearch: boolean;
+}
+
 export interface AgentModuleConfig {
   /** 单个 Agent 的最大工具调用次数 */
   maxToolCalls: number;
   /** 同批次并行 Agent 池大小 */
   parallelPoolSize: number;
+}
+
+export interface FocusModuleConfig {
+  enabled: boolean;
+  /** 同签名工具调用达到该次数判定为循环 */
+  repeatThreshold: number;
+  /** 只读调用达到该次数且无写入判定为空转 */
+  idleCallThreshold: number;
 }
 
 export interface WorkflowConfig {
@@ -50,6 +67,10 @@ export interface WorkflowConfig {
   orchestratorConfig?: Partial<OrchestratorModuleConfig>;
   /** Agent 执行配置 */
   agentConfig?: Partial<AgentModuleConfig>;
+  /** 需求澄清阶段配置 */
+  clarifyConfig?: Partial<ClarifierModuleConfig>;
+  /** 专注度监控配置 */
+  focusConfig?: Partial<FocusModuleConfig>;
   /** Verifier 两阶段校验配置 */
   verifierConfig?: Partial<VerifierModuleConfig>;
   /** 文件锁配置 */
@@ -75,6 +96,18 @@ const defaultConfig: WorkflowConfig = {
   agentConfig: {
     maxToolCalls: 25,
     parallelPoolSize: 5,
+  },
+  clarifyConfig: {
+    enabled: true,
+    auto: false,
+    complexityThreshold: 7,
+    maxQuestions: 4,
+    enableResearch: true,
+  },
+  focusConfig: {
+    enabled: true,
+    repeatThreshold: 3,
+    idleCallThreshold: 12,
   },
   verifierConfig: {
     autoCheck: true,

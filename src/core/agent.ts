@@ -9,6 +9,7 @@ import { tokenBudget } from './tokenBudget';
 import { getProjectMemory } from './memory';
 import { getWorkflowSignal } from './abort';
 import { GlobalConfig } from './config';
+import { FocusMonitor } from './focus';
 import { MCPRegistry } from '../mcp/registry';
 import { workflowEvents } from './events';
 
@@ -104,6 +105,16 @@ Please provide the best possible output for this sub-task.`;
 
     let toolCallCount = 0;
     const MAX_TOOL_CALLS = GlobalConfig.get().agentConfig?.maxToolCalls ?? 25;
+    const focusMonitor = new FocusMonitor(
+      {
+        id: task.id,
+        description: task.description,
+        isolatedFiles: (task as any).isolatedFiles || [],
+        sharedFiles: (task as any).sharedFiles || [],
+      },
+      this.agentId,
+      (GlobalConfig.get() as any).focusConfig
+    );
 
     try {
       // 1. Always inject built-in tools (read_file, write_file, run_terminal_command, etc.)
@@ -189,7 +200,12 @@ Please provide the best possible output for this sub-task.`;
 
           const executor = toolExecutors.get(name);
           if (executor) {
-            const result = await executor(input);
+            let result = await executor(input);
+            // 专注度监控：漂移时把 refocus 警告追加到工具结果回灌给 LLM
+            const focusWarning = focusMonitor.recordToolCall(name, input);
+            if (focusWarning) {
+              result += focusWarning;
+            }
             if (task.id) {
               workflowEvents.emit('log', { taskId: task.id, message: `[${this.agentId}] [Tool Result] ${result.slice(0, 100)}...` });
               if (name === 'write_file' || name === 'edit_file' || name === 'replace_file_content' || name === 'multi_replace_file_content') {

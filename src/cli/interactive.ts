@@ -76,9 +76,37 @@ export async function runInteractiveCLI() {
       }
     };
 
+    const onClarificationRequested = async (data: any) => {
+      s.stop('Clarification needed.');
+      p.log.info(color.cyan('目标较复杂，请确认几个关键决策（来自市场/开源项目调研）：'));
+
+      const answers: { questionId: string; choice: string; assumed: boolean }[] = [];
+      for (const q of data.questions) {
+        const choice = await p.select({
+          message: q.question,
+          options: q.options.map((o: any) => ({
+            value: o.label,
+            label: o.recommended ? `${o.label} (推荐)` : o.label,
+            hint: o.rationale?.slice(0, 80),
+          })),
+          initialValue: (q.options.find((o: any) => o.recommended) ?? q.options[0]).label,
+        });
+        if (p.isCancel(choice)) {
+          // 用户取消 → 该题采用推荐项并标记为假设
+          const rec = q.options.find((o: any) => o.recommended) ?? q.options[0];
+          answers.push({ questionId: q.id, choice: rec.label, assumed: true });
+        } else {
+          answers.push({ questionId: q.id, choice: choice as string, assumed: false });
+        }
+      }
+      s.start('Resuming planning with requirements spec...');
+      data.resolve(answers);
+    };
+
     workflowEvents.on('workflowStarted', onWorkflowStarted);
     workflowEvents.on('log', onLog);
     workflowEvents.on('approvalRequested', onApprovalRequested);
+    workflowEvents.on('clarificationRequested', onClarificationRequested);
 
     try {
       const orchestrator = new Orchestrator();
@@ -93,6 +121,7 @@ export async function runInteractiveCLI() {
       workflowEvents.off('workflowStarted', onWorkflowStarted);
       workflowEvents.off('log', onLog);
       workflowEvents.off('approvalRequested', onApprovalRequested);
+      workflowEvents.off('clarificationRequested', onClarificationRequested);
     }
   }
 }
