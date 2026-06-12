@@ -197,6 +197,13 @@ Please provide the best possible output for this sub-task.`;
           if (toolCallCount > MAX_TOOL_CALLS) {
             return `System Error: Maximum tool call limit (${MAX_TOOL_CALLS}) reached. You must stop calling tools and provide your final response immediately.`;
           }
+
+          // C.2 重度干预：专注度崩溃 → 拒绝继续执行工具，强制收束
+          if (focusMonitor.shouldAbort()) {
+            return `System Error: Your focus score has collapsed (out-of-scope writes / loops / idle burn). ` +
+              `Tool execution is suspended. Provide your final response NOW: summarize what you completed, ` +
+              `what remains, and why you deviated from the task scope.`;
+          }
           
           if (task.id) workflowEvents.emit('log', { taskId: task.id, message: `[${this.agentId}] [Tool Call] ${name}` });
 

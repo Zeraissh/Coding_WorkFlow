@@ -270,6 +270,59 @@ export async function askLLM(
   return await askAnthropic(system, messages, tools, onToolCall, temperature, taskId, agentId, config, opts);
 }
 
+// ============================================================================
+// 上下文压缩 — 长工具循环防爆
+// ============================================================================
+
+export interface CompactionConfig {
+  /** 触发压缩的会话总字符数水位（粗略 ≈ tokens × 3-4） */
+  maxChars: number;
+  /** 始终保留全文的最近消息条数 */
+  keepRecent: number;
+  /** 旧 tool_result 折叠后保留的字符数 */
+  digestChars: number;
+}
+
+export const DEFAULT_COMPACTION: CompactionConfig = {
+  maxChars: 150_000,
+  keepRecent: 6,
+  digestChars: 300,
+};
+
+const COMPACTED_MARKER = '…[compacted';
+
+/**
+ * 就地压缩会话历史：超过水位时，把"最近 keepRecent 条之外"的 tool_result
+ * 长内容折叠为摘要。工具结果是会话中最大的冗余源（文件全文、命令输出），
+ * 而模型在后续轮次几乎只需要其结论。assistant 的 tool_use 块保持原样以
+ * 维持协议配对。返回是否做了压缩。
+ */
+export function compactMessagesInPlace(
+  messages: Anthropic.MessageParam[],
+  config: CompactionConfig = DEFAULT_COMPACTION
+): boolean {
+  const totalChars = JSON.stringify(messages).length;
+  if (totalChars <= config.maxChars) return false;
+
+  let compacted = false;
+  const cutoff = Math.max(0, messages.length - config.keepRecent);
+  for (let i = 0; i < cutoff; i++) {
+    const msg = messages[i]!;
+    if (msg.role !== 'user' || typeof msg.content === 'string') continue;
+    for (const block of msg.content) {
+      if ((block as any).type !== 'tool_result') continue;
+      const b = block as any;
+      if (typeof b.content !== 'string') continue;
+      if (b.content.length <= config.digestChars || b.content.includes(COMPACTED_MARKER)) continue;
+      const original = b.content.length;
+      b.content = b.content.slice(0, config.digestChars) +
+        ` ${COMPACTED_MARKER}, ${original} chars total]`;
+      compacted = true;
+    }
+  }
+  return compacted;
+}
+
 /** 流式增量统一出口：本地回调 + Dashboard 事件 */
 function emitTextDelta(delta: string, opts: AskLLMOptions, taskId?: string, agentId?: string): void {
   if (!delta) return;
@@ -429,6 +482,9 @@ async function askOpenAI(
 
     if (toolResults.length > 0) {
       messages.push({ role: 'user', content: toolResults });
+      if (compactMessagesInPlace(messages) && taskId) {
+        workflowEvents.emit('log', { taskId, message: '🗜 Context compacted (older tool results folded)' });
+      }
       options.messages = [
         { role: 'system', content: system },
         ...mapAnthropicMessageToOpenAI(messages)
@@ -540,6 +596,9 @@ async function askAnthropic(
     
     if (toolResults.length > 0) {
       messages.push({ role: 'user', content: toolResults });
+      if (compactMessagesInPlace(messages) && taskId) {
+        workflowEvents.emit('log', { taskId, message: '🗜 Context compacted (older tool results folded)' });
+      }
       options.messages = messages;
       response = await withRetry(createStreamed, agentId, taskId, 3, opts.signal);
     } else {

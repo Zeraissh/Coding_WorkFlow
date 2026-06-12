@@ -19,6 +19,7 @@ import { Clarifier, ClarifyAnswer } from './orchestrator/clarifier';
 import { RuleStore } from './rules';
 import { KnowledgeStore } from './knowledge';
 import { SkillRegistry } from './skills';
+import { RepoMap } from './repomap';
 import { SnapshotManager } from './snapshotManager';
 import { MCPRegistry } from '../mcp/registry';
 import { PluginManager } from './pluginManager';
@@ -208,11 +209,22 @@ export class Orchestrator {
         ragContext = '\n\n【Local RAG 代码上下文片段】\n' + relevantCode.map(c => `// ${c.file}:${c.startLine}\n${c.content}`).join('\n\n');
       }
 
-      // Inject Project Map
-      const projectMapLines = safeListDir(process.cwd(), 2);
-      const projectMapContext = projectMapLines.length > 0 
-        ? `\n\n【Project Directory Map (Depth 2)】\n${projectMapLines.join('\n')}` 
-        : '';
+      // Inject Repo Map（符号地图，信息密度优于目录树；空仓库回退目录树）
+      let projectMapContext = '';
+      try {
+        const repoMapText = new RepoMap().render();
+        if (repoMapText) {
+          projectMapContext = `\n\n【Repo Map (file → top-level symbols)】\n${repoMapText}`;
+        }
+      } catch (e: any) {
+        console.warn(`[orchestrator] Repo map failed: ${e.message}`);
+      }
+      if (!projectMapContext) {
+        const projectMapLines = safeListDir(process.cwd(), 2);
+        projectMapContext = projectMapLines.length > 0
+          ? `\n\n【Project Directory Map (Depth 2)】\n${projectMapLines.join('\n')}`
+          : '';
+      }
 
       const requirementsSection = requirementsContext
         ? `\n\n【需求规格（Clarify Phase 产出，分解必须遵循）】\n${requirementsContext}`
