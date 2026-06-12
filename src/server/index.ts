@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import * as fs from 'fs';
 import { Orchestrator } from '../core/orchestrator';
 import { workflowEvents } from '../core/events';
 import { GlobalConfig } from '../core/config';
@@ -149,8 +150,8 @@ app.get('/api/config', (req, res) => {
   let activePlugins: string[] = [];
   try {
     const pluginsDir = path.join(process.cwd(), '.workflow', 'plugins');
-    if (require('fs').existsSync(pluginsDir)) {
-      activePlugins = require('fs').readdirSync(pluginsDir).filter((f: string) => f.endsWith('.js') || f.endsWith('.mjs'));
+    if (fs.existsSync(pluginsDir)) {
+      activePlugins = fs.readdirSync(pluginsDir).filter((f: string) => f.endsWith('.js') || f.endsWith('.mjs'));
     }
   } catch (e: any) {
     console.warn(`[server] Failed to list plugins: ${e.message}`);

@@ -26,10 +26,42 @@ SWE-bench-Lite 补丁生成适配器（在 WSL2 / Linux 中运行）。
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
+
+
+# IPv4 优先：部分网络环境 IPv6 路由黑洞，而 httpx（huggingface_hub 的传输层）
+# 不做地址回退，解析到 IPv6 就会 SSL EOF 吊死。标准库会逐地址重试所以没事。
+# 这里统一过滤出 IPv4 结果（无 IPv4 时保留原结果，不破坏纯 v6 环境）。
+_orig_getaddrinfo = socket.getaddrinfo
+
+
+def _ipv4_first_getaddrinfo(*args, **kwargs):
+    results = _orig_getaddrinfo(*args, **kwargs)
+    ipv4 = [r for r in results if r[0] == socket.AF_INET]
+    return ipv4 or results
+
+
+socket.getaddrinfo = _ipv4_first_getaddrinfo
+
+
+# 受限网络自适应：huggingface_hub 在 import 时固化 HF_ENDPOINT，
+# 所以必须在导入 datasets 之前探测并设置镜像。
+def _ensure_hf_endpoint():
+    if os.environ.get("HF_ENDPOINT"):
+        return
+    try:
+        urllib.request.urlopen("https://huggingface.co/api/datasets?limit=1", timeout=5)
+    except Exception:
+        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+        print("huggingface.co unreachable — using mirror https://hf-mirror.com", flush=True)
+
+
+_ensure_hf_endpoint()
 
 try:
     from datasets import load_dataset
