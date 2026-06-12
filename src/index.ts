@@ -115,6 +115,22 @@ program
   });
 
 program
+  .command('mcp-serve')
+  .description('Expose the workflow engine as an MCP server over stdio (for Claude Code, Cursor, etc.)')
+  .action(async () => {
+    // stdio 传输下 stdout 是 JSON-RPC 信道：引擎所有 console.log 重定向到 stderr
+    console.log = console.error;
+    console.info = console.error;
+
+    const { createMcpServer } = await import('./mcp/server');
+    const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
+
+    const server = createMcpServer();
+    await server.connect(new StdioServerTransport());
+    console.error('[mcp-serve] coding-workflow MCP server running on stdio');
+  });
+
+program
   .command('config')
   .description('Configure LLM provider, model, and API keys')
   .action(async () => {
