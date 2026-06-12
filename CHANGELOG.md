@@ -2,6 +2,13 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — P2 收尾（repo map、上下文压缩、重度干预）
+
+### Added
+- **Repo Map**：`src/core/repomap.ts`——正则提取 6 类语言（TS/JS、Python、Go、Java/C#、C/C++、Rust）的顶层符号，渲染"文件 → 符号"紧凑地图注入规划上下文，替代纯目录树（空仓库自动回退）；零原生依赖
+- **长任务上下文压缩**：`compactMessagesInPlace`（llm/client.ts）——会话超水位（默认 15 万字符）时把最近 6 条之外的旧 tool_result 折叠为 300 字符摘要，工具循环每轮自动执行，防止长任务上下文爆炸；assistant 的 tool_use 块保持原样维持协议配对
+- **专注度重度干预（C.2）**：`FocusMonitor.shouldAbort()`——分数 ≤ 阈值（默认 25）时 Agent 工具执行被挂起，强制立即收束输出（总结已完成/未完成/偏移原因）；首次跨越发 `focusEscalation` 事件并计入 A.1 归因
+
 ## [Unreleased] — P2.5 进化能力（第三批）
 
 ### Added

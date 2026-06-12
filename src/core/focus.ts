@@ -21,12 +21,15 @@ export interface FocusConfig {
   repeatThreshold: number;
   /** 只读调用达到该次数且无写入判定为空转 */
   idleCallThreshold: number;
+  /** 重度干预：专注度分数 ≤ 该值时强制 Agent 收束任务（0 = 关闭） */
+  abortScoreThreshold: number;
 }
 
 export const DEFAULT_FOCUS_CONFIG: FocusConfig = {
   enabled: true,
   repeatThreshold: 3,
   idleCallThreshold: 12,
+  abortScoreThreshold: 25,
 };
 
 export interface FocusSignals {
@@ -133,6 +136,29 @@ export class FocusMonitor {
     return warnings.length > 0
       ? `\n\n⚠️ [FOCUS WARNING] ${warnings.join('\n⚠️ [FOCUS WARNING] ')}`
       : undefined;
+  }
+
+  private escalated = false;
+
+  /**
+   * 重度干预（C.2）：专注度跌破 abortScoreThreshold 时返回 true，
+   * Agent 应停止工具调用、立即收束输出。首次跨越阈值发 focusEscalation 事件。
+   */
+  shouldAbort(): boolean {
+    if (!this.config.enabled || this.config.abortScoreThreshold <= 0) return false;
+    const collapsed = this.getScore() <= this.config.abortScoreThreshold;
+    if (collapsed && !this.escalated) {
+      this.escalated = true;
+      workflowEvents.emit('focusEscalation', {
+        taskId: this.task.id,
+        agentId: this.agentId,
+        score: this.getScore(),
+        signals: this.getSignals(),
+      });
+      this.intervene('focus_collapse_abort',
+        `Focus score collapsed to ${this.getScore()} — forcing the agent to wrap up.`);
+    }
+    return collapsed;
   }
 
   /** 专注度评分 0-100（Dashboard 展示用） */

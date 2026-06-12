@@ -92,6 +92,45 @@ describe('FocusMonitor — idle burn', () => {
   });
 });
 
+describe('FocusMonitor — heavy intervention (C.2)', () => {
+  it('shouldAbort triggers when the score collapses and emits focusEscalation once', () => {
+    const escalations: any[] = [];
+    const listener = (d: any) => escalations.push(d);
+    workflowEvents.on('focusEscalation', listener);
+
+    try {
+      const m = new FocusMonitor(task, 'agent-1', { abortScoreThreshold: 60 });
+      expect(m.shouldAbort()).toBe(false);
+
+      // 一次越界写 + 一次循环 → 100 - 25 - 25 = 50 ≤ 60
+      m.recordToolCall('write_file', { path: 'outside.ts', content: 'x' });
+      const args = { pattern: 'p' };
+      m.recordToolCall('grep_search', args);
+      m.recordToolCall('grep_search', args);
+      m.recordToolCall('grep_search', args);
+
+      expect(m.shouldAbort()).toBe(true);
+      expect(m.shouldAbort()).toBe(true); // 持续为 true
+      expect(escalations).toHaveLength(1); // 事件只发一次
+      expect(escalations[0]).toMatchObject({ taskId: 't1', agentId: 'agent-1' });
+      // 升级也计入干预（进 A.1 归因）
+      expect(interventions.some(i => i.type === 'focus_collapse_abort')).toBe(true);
+    } finally {
+      workflowEvents.off('focusEscalation', listener);
+    }
+  });
+
+  it('abortScoreThreshold 0 disables heavy intervention', () => {
+    const m = new FocusMonitor(task, 'agent-1', { abortScoreThreshold: 0 });
+    m.recordToolCall('write_file', { path: 'outside1.ts', content: 'x' });
+    m.recordToolCall('edit_file', { path: 'outside2.ts', search: 'a', replace: 'b' });
+    m.recordToolCall('write_file', { path: 'outside3.ts', content: 'x' });
+    m.recordToolCall('write_file', { path: 'outside4.ts', content: 'x' });
+    expect(m.getScore()).toBe(0);
+    expect(m.shouldAbort()).toBe(false);
+  });
+});
+
 describe('FocusMonitor — events & config', () => {
   it('emits focusUpdate with score on every call', () => {
     const m = new FocusMonitor(task, 'agent-1');
