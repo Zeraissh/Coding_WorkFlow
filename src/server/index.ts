@@ -108,9 +108,11 @@ app.get('/api/config', (req, res) => {
     if (require('fs').existsSync(pluginsDir)) {
       activePlugins = require('fs').readdirSync(pluginsDir).filter((f: string) => f.endsWith('.js') || f.endsWith('.mjs'));
     }
-  } catch (e) {}
+  } catch (e: any) {
+    console.warn(`[server] Failed to list plugins: ${e.message}`);
+  }
 
-  res.json({ 
+  res.json({
     requireApproval: GlobalConfig.get().requireApproval,
     activePlugins,
     projectMemory: getProjectMemory(),

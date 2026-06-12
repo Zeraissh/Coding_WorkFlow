@@ -1,2 +1,0 @@
-export declare function startServer(port?: number): import("node:http").Server<typeof import("node:http").IncomingMessage, typeof import("node:http").ServerResponse>;
-//# sourceMappingURL=index.d.ts.map

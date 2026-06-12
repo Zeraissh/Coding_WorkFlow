@@ -8,10 +8,21 @@
   "bin": {
     "autocode": "./bin/autocode.cjs"
   },
+  "files": [
+    "dist",
+    "bin",
+    "src",
+    "README.md",
+    "USAGE.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "reverse": "tsx src/scripts/reverseString.ts"
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
   },
   "repository": {
     "type": "git",

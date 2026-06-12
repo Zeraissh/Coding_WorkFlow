@@ -61,7 +61,9 @@ export class Orchestrator {
    */
   constructor() {
     this.pluginManager = new PluginManager();
-    this.pluginManager.loadAll(); // Fire and forget load
+    this.pluginManager.loadAll().catch((e: any) => {
+      console.warn(`[orchestrator] Plugin loading failed: ${e.message}`);
+    });
     this.templateManager = new TemplateManager();
 
     const config = this.loadOrchestratorConfig();
@@ -90,7 +92,9 @@ export class Orchestrator {
       if (config.orchestratorConfig) {
         return { ...DEFAULT_DECOMPOSER_CONFIG, ...config.orchestratorConfig };
       }
-    } catch {}
+    } catch (e: any) {
+      console.warn(`[orchestrator] Failed to load orchestrator config, using defaults: ${e.message}`);
+    }
     return { ...DEFAULT_DECOMPOSER_CONFIG };
   }
 
@@ -341,9 +345,9 @@ Return ONLY valid JSON.`;
       state!.currentBatchIndex = batchIndex + 1;
       stateManager.saveState(state!);
 
-      // 每批完成后做动态重分配
+      // 每批完成后标记完成（内部会自动触发动态重分配）
       for (const agent of batchAgents) {
-        budget.rebalance(agent.getAgentId());
+        budget.markCompleted(agent.getAgentId());
       }
     }
 

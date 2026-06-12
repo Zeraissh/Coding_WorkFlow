@@ -244,7 +244,9 @@ Please provide the best possible output for this sub-task.`;
       for (const client of activeMcpClients) {
         try {
           await client.disconnect();
-        } catch (e) {}
+        } catch (e: any) {
+          console.warn(`[agent:${this.agentId}] MCP disconnect failed: ${e.message}`);
+        }
       }
     }
   }
