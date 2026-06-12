@@ -33,6 +33,13 @@ export interface BudgetModuleConfig {
   };
 }
 
+export interface AgentModuleConfig {
+  /** 单个 Agent 的最大工具调用次数 */
+  maxToolCalls: number;
+  /** 同批次并行 Agent 池大小 */
+  parallelPoolSize: number;
+}
+
 export interface WorkflowConfig {
   requireApproval: boolean;
   provider: 'anthropic' | 'deepseek' | 'openai';
@@ -41,6 +48,8 @@ export interface WorkflowConfig {
   reasoningEffort: 'none' | 'high' | 'max';
   /** Orchestrator 拆解增强配置 */
   orchestratorConfig?: Partial<OrchestratorModuleConfig>;
+  /** Agent 执行配置 */
+  agentConfig?: Partial<AgentModuleConfig>;
   /** Verifier 两阶段校验配置 */
   verifierConfig?: Partial<VerifierModuleConfig>;
   /** 文件锁配置 */
@@ -54,7 +63,7 @@ const CONFIG_PATH = path.join(os.homedir(), '.workflow_config.json');
 const defaultConfig: WorkflowConfig = {
   requireApproval: true,
   provider: 'anthropic',
-  model: 'claude-3-5-sonnet-20241022',
+  model: 'claude-sonnet-4-6',
   apiKey: '',
   reasoningEffort: 'none',
   orchestratorConfig: {
@@ -62,6 +71,10 @@ const defaultConfig: WorkflowConfig = {
     minComplexityForSplit: 2,
     enableSelfCheck: true,
     fewShotCategory: 'auto',
+  },
+  agentConfig: {
+    maxToolCalls: 25,
+    parallelPoolSize: 5,
   },
   verifierConfig: {
     autoCheck: true,

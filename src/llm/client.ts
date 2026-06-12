@@ -192,7 +192,8 @@ async function withRetry<T>(
   operation: () => Promise<T>,
   agentId?: string,
   taskId?: string,
-  maxRetries = 3
+  maxRetries = 3,
+  signal?: AbortSignal
 ): Promise<T> {
   let attempt = 0;
   while (true) {
@@ -201,7 +202,12 @@ async function withRetry<T>(
     } catch (error: any) {
       attempt++;
       const status = error?.status || error?.response?.status;
-      
+
+      // E-Stop / 主动中止：立即抛出，不重试
+      if (signal?.aborted || error?.name === 'AbortError' || error?.name === 'APIUserAbortError') {
+        throw new Error(`LLM call aborted: ${signal?.reason?.message || error.message}`);
+      }
+
       // Fatal errors: don't retry
       if (status === 401 || status === 403 || status === 404) {
         const msg = `Fatal LLM API Error (${status}): ${error.message}. Please check your API key and model configuration.`;
@@ -238,6 +244,13 @@ async function withRetry<T>(
  * @param {string} [agentId] - The executing SubAgent ID for budget tracking.
  * @returns {Promise<Anthropic.Message>} The final response from the LLM after all tool calls complete.
  */
+export interface AskLLMOptions {
+  /** 流式文本增量回调（同时会触发 assistantDelta 事件推送到 Dashboard） */
+  onText?: ((delta: string) => void) | undefined;
+  /** E-Stop 中止信号 */
+  signal?: AbortSignal | undefined;
+}
+
 export async function askLLM(
   system: string,
   messages: Anthropic.MessageParam[],
@@ -245,15 +258,76 @@ export async function askLLM(
   onToolCall?: (name: string, input: any) => Promise<string>,
   temperature: number = 0.7,
   taskId?: string,
-  agentId?: string
+  agentId?: string,
+  opts: AskLLMOptions = {}
 ): Promise<Anthropic.Message> {
   const config = GlobalConfig.get();
 
   if (config.provider === 'openai' || config.provider === 'deepseek') {
-    return await askOpenAI(system, messages, tools, onToolCall, temperature, taskId, agentId, config);
+    return await askOpenAI(system, messages, tools, onToolCall, temperature, taskId, agentId, config, opts);
   }
 
-  return await askAnthropic(system, messages, tools, onToolCall, temperature, taskId, agentId, config);
+  return await askAnthropic(system, messages, tools, onToolCall, temperature, taskId, agentId, config, opts);
+}
+
+/** 流式增量统一出口：本地回调 + Dashboard 事件 */
+function emitTextDelta(delta: string, opts: AskLLMOptions, taskId?: string, agentId?: string): void {
+  if (!delta) return;
+  opts.onText?.(delta);
+  if (taskId || agentId) {
+    workflowEvents.emit('assistantDelta', { taskId, agentId, text: delta });
+  }
+}
+
+/** 消费 OpenAI 流式响应，把 chunk 累积回一个完整的 ChatCompletion 形状 */
+async function consumeOpenAIStream(
+  stream: AsyncIterable<any>,
+  opts: AskLLMOptions,
+  taskId?: string,
+  agentId?: string
+): Promise<any> {
+  let id = '';
+  let content = '';
+  let reasoning = '';
+  const toolCalls: any[] = [];
+  let usage: any = undefined;
+  let finishReason: string | null = null;
+
+  for await (const chunk of stream) {
+    if (chunk.id) id = chunk.id;
+    if (chunk.usage) usage = chunk.usage;
+    const choice = chunk.choices?.[0];
+    if (!choice) continue;
+    if (choice.finish_reason) finishReason = choice.finish_reason;
+    const delta = choice.delta;
+    if (!delta) continue;
+    if (delta.content) {
+      content += delta.content;
+      emitTextDelta(delta.content, opts, taskId, agentId);
+    }
+    if (delta.reasoning_content) {
+      reasoning += delta.reasoning_content;
+    }
+    for (const tc of delta.tool_calls ?? []) {
+      const idx = tc.index ?? 0;
+      if (!toolCalls[idx]) {
+        toolCalls[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } };
+      }
+      if (tc.id) toolCalls[idx].id = tc.id;
+      if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
+      if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
+    }
+  }
+
+  const message: any = { role: 'assistant', content: content || null };
+  if (reasoning) message.reasoning_content = reasoning;
+  if (toolCalls.length > 0) message.tool_calls = toolCalls.filter(Boolean);
+
+  return {
+    id,
+    usage,
+    choices: [{ message, finish_reason: finishReason }],
+  };
 }
 
 async function askOpenAI(
@@ -264,13 +338,16 @@ async function askOpenAI(
   temperature: number,
   taskId: string | undefined,
   agentId: string | undefined,
-  config: any
+  config: any,
+  opts: AskLLMOptions = {}
 ): Promise<Anthropic.Message> {
   const openai = getOpenAIClient(config);
 
   const options: any = {
     model: config.model,
     temperature,
+    stream: true,
+    stream_options: { include_usage: true },
     messages: [
       { role: 'system', content: system },
       ...mapAnthropicMessageToOpenAI(messages)
@@ -289,7 +366,15 @@ async function askOpenAI(
     }
   }
 
-  let response = await withRetry(() => openai.chat.completions.create(options), agentId, taskId);
+  const requestOptions: any = {};
+  if (opts.signal) requestOptions.signal = opts.signal;
+
+  const createStreamed = async () => {
+    const stream = await openai.chat.completions.create(options, requestOptions);
+    return consumeOpenAIStream(stream as unknown as AsyncIterable<any>, opts, taskId, agentId);
+  };
+
+  let response = await withRetry(createStreamed, agentId, taskId, 3, opts.signal);
 
   while (response.choices[0]!.message.tool_calls && onToolCall) {
     const msg = response.choices[0]!.message;
@@ -348,7 +433,7 @@ async function askOpenAI(
         { role: 'system', content: system },
         ...mapAnthropicMessageToOpenAI(messages)
       ];
-      response = await withRetry(() => openai.chat.completions.create(options), agentId, taskId);
+      response = await withRetry(createStreamed, agentId, taskId, 3, opts.signal);
     } else {
       break;
     }
@@ -388,7 +473,8 @@ async function askAnthropic(
   temperature: number,
   taskId: string | undefined,
   agentId: string | undefined,
-  config: any
+  config: any,
+  opts: AskLLMOptions = {}
 ): Promise<Anthropic.Message> {
   const anthropic = getAnthropicClient(config);
   const options: any = {
@@ -406,7 +492,17 @@ async function askAnthropic(
   };
   if (tools && tools.length > 0) options.tools = tools;
 
-  let response = await withRetry(() => anthropic.messages.create(options), agentId, taskId);
+  const requestOptions: any = {};
+  if (opts.signal) requestOptions.signal = opts.signal;
+
+  // 流式调用：SDK 的 stream helper 提供文本增量事件，finalMessage() 仍返回完整 Message
+  const createStreamed = async (): Promise<Anthropic.Message> => {
+    const stream = anthropic.messages.stream(options, requestOptions);
+    stream.on('text', (delta: string) => emitTextDelta(delta, opts, taskId, agentId));
+    return await stream.finalMessage();
+  };
+
+  let response = await withRetry(createStreamed, agentId, taskId, 3, opts.signal);
 
   while (response.stop_reason === 'tool_use' && onToolCall) {
     messages.push({ role: 'assistant', content: response.content });
@@ -445,7 +541,7 @@ async function askAnthropic(
     if (toolResults.length > 0) {
       messages.push({ role: 'user', content: toolResults });
       options.messages = messages;
-      response = await withRetry(() => anthropic.messages.create(options), agentId, taskId);
+      response = await withRetry(createStreamed, agentId, taskId, 3, opts.signal);
     } else {
       break;
     }

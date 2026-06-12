@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Send, Shield, ShieldAlert, CheckCircle2, PlayCircle, Clock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Send, Shield, ShieldAlert, CheckCircle2, PlayCircle, Clock, OctagonX, Wifi, WifiOff } from 'lucide-react';
 import './index.css';
 
 interface Task {
@@ -9,6 +9,7 @@ interface Task {
   logs: string[];
   tokensSpent?: number;
   filesChanged?: string[];
+  streamText?: string;
 }
 
 interface ApprovalRequest {
@@ -31,6 +32,8 @@ function App() {
   const [diffText, setDiffText] = useState<string | null>(null);
   const [plugins, setPlugins] = useState<string[]>([]);
   const [memory, setMemory] = useState<string>('');
+  const [connection, setConnection] = useState<'connected' | 'reconnecting'>('reconnecting');
+  const reconnectAttempt = useRef(0);
 
   useEffect(() => {
     fetch(`${API_BASE}/config`)
@@ -68,10 +71,45 @@ function App() {
     });
   };
 
-  useEffect(() => {
-    const eventSource = new EventSource(`${API_BASE}/stream`);
+  const stopWorkflow = async () => {
+    await fetch(`${API_BASE}/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Stopped from dashboard' })
+    });
+  };
 
-    eventSource.addEventListener('taskStarted', (e) => {
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let disposed = false;
+
+    const connect = () => {
+      if (disposed) return;
+      eventSource = new EventSource(`${API_BASE}/stream`);
+      attachListeners(eventSource);
+
+      eventSource.onopen = () => {
+        reconnectAttempt.current = 0;
+        setConnection('connected');
+        // 服务端会重放完整事件历史，清空后由重放重建，避免日志重复
+        setTasks([]);
+      };
+
+      eventSource.onerror = () => {
+        setConnection('reconnecting');
+        // EventSource 自带重连只覆盖部分场景；CLOSED 状态需要手动指数退避重建
+        if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+          eventSource.close();
+          const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempt.current));
+          reconnectAttempt.current += 1;
+          reconnectTimer = setTimeout(connect, delay);
+        }
+      };
+    };
+
+    const attachListeners = (es: EventSource) => {
+    es.addEventListener('taskStarted', (e) => {
       const data = JSON.parse(e.data);
       setTasks(prev => {
         if (prev.find(t => t.id === data.taskId)) return prev;
@@ -79,7 +117,7 @@ function App() {
       });
     });
 
-    eventSource.addEventListener('log', (e) => {
+    es.addEventListener('log', (e) => {
       const data = JSON.parse(e.data);
       setTasks(prev => {
         const exists = prev.find(t => t.id === data.taskId);
@@ -91,7 +129,7 @@ function App() {
       });
     });
 
-    eventSource.addEventListener('taskCompleted', (e) => {
+    es.addEventListener('taskCompleted', (e) => {
       const data = JSON.parse(e.data);
       setTasks(prev => prev.map(t => {
         if (t.id === data.taskId) {
@@ -101,14 +139,14 @@ function App() {
       }));
     });
 
-    eventSource.addEventListener('llmUsageReport', (e) => {
+    es.addEventListener('llmUsageReport', (e) => {
       const data = JSON.parse(e.data);
       if (data.taskId) {
         setTasks(prev => prev.map(t => t.id === data.taskId ? { ...t, tokensSpent: data.tokens } : t));
       }
     });
 
-    eventSource.addEventListener('fileChanged', (e) => {
+    es.addEventListener('fileChanged', (e) => {
       const data = JSON.parse(e.data);
       if (data.taskId) {
         setTasks(prev => prev.map(t => {
@@ -123,7 +161,7 @@ function App() {
       }
     });
 
-    eventSource.addEventListener('error', (e: any) => {
+    es.addEventListener('error', (e: any) => {
       if (e.data) {
         const data = JSON.parse(e.data);
         setFinalResult(`Error: ${data.message}`);
@@ -131,12 +169,12 @@ function App() {
       }
     });
 
-    eventSource.addEventListener('approvalRequested', (e) => {
+    es.addEventListener('approvalRequested', (e) => {
       const data = JSON.parse(e.data);
       setApprovals(prev => [...prev, data]);
     });
 
-    eventSource.addEventListener('workflowCompleted', (e) => {
+    es.addEventListener('workflowCompleted', (e) => {
       const data = JSON.parse(e.data);
       setFinalResult(data.result);
       if (data.tokensSpent) setTokensSpent(data.tokensSpent);
@@ -144,7 +182,32 @@ function App() {
       setWorkflowStatus('completed');
     });
 
-    return () => eventSource.close();
+    es.addEventListener('workflowStopped', (e) => {
+      const data = JSON.parse(e.data);
+      setFinalResult(`🛑 Workflow stopped: ${data.reason}. Progress saved — resumable via CLI.`);
+      setWorkflowStatus('completed');
+    });
+
+    es.addEventListener('assistantDelta', (e) => {
+      const data = JSON.parse(e.data);
+      const key = data.taskId || data.agentId;
+      if (!key) return;
+      setTasks(prev => prev.map(t => {
+        if (t.id !== key) return t;
+        // 只保留尾部 2000 字符，避免长流式输出撑爆 DOM
+        const merged = ((t.streamText || '') + data.text).slice(-2000);
+        return { ...t, streamText: merged };
+      }));
+    });
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      eventSource?.close();
+    };
   }, []);
 
   const handleApprove = async (reqId: string, approved: boolean) => {
@@ -161,6 +224,12 @@ function App() {
       <header className="header">
         <h1>Dynamic Workflow</h1>
         <div className="settings">
+          {connection === 'connected'
+            ? <Wifi size={18} color="var(--success)" />
+            : <WifiOff size={18} color="#f59e0b" />}
+          <span style={{ fontSize: '0.85rem', color: connection === 'connected' ? 'var(--text-secondary)' : '#f59e0b' }}>
+            {connection === 'connected' ? 'Live' : 'Reconnecting…'}
+          </span>
           {requireApproval ? <Shield size={18} color="var(--success)" /> : <ShieldAlert size={18} color="var(--text-secondary)" />}
           <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Secure HITL Mode</span>
           <button className={`toggle ${requireApproval ? '' : 'off'}`} onClick={toggleApproval} />
@@ -178,6 +247,15 @@ function App() {
         <button onClick={startWorkflow} disabled={workflowStatus === 'running' || !goal.trim()}>
           {workflowStatus === 'running' ? 'Running...' : <><Send size={18} style={{verticalAlign: 'text-bottom', marginRight: 8}}/> Launch</>}
         </button>
+        {workflowStatus === 'running' && (
+          <button
+            onClick={stopWorkflow}
+            style={{ background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', borderRadius: '8px', padding: '0 1rem', fontWeight: 600 }}
+            title="Emergency stop: aborts after the current batch; progress is saved and resumable"
+          >
+            <OctagonX size={18} style={{verticalAlign: 'text-bottom', marginRight: 6}}/> Stop
+          </button>
+        )}
       </div>
 
       <div className="main-layout" style={{ display: 'flex', gap: '2rem', padding: '0 2rem' }}>
@@ -227,6 +305,12 @@ function App() {
                   </span>
                 ))}
               </div>
+            )}
+
+            {task.streamText && task.status === 'running' && (
+              <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem', color: '#a78bfa', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '6px', maxHeight: '120px', overflowY: 'auto', marginTop: '0.5rem' }}>
+                {task.streamText}
+              </pre>
             )}
 
             <div className="task-logs">

@@ -35,7 +35,7 @@ export const builtinTools = [
   },
   {
     name: 'write_file',
-    description: 'Write content to a file. Paths must stay within the project root directory.',
+    description: 'Create a new file or fully overwrite an existing one. For modifying part of an existing file, prefer edit_file — it is cheaper and avoids accidentally losing content. Paths must stay within the project root directory.',
     input_schema: {
       type: 'object',
       properties: {
@@ -43,6 +43,20 @@ export const builtinTools = [
         content: { type: 'string', description: 'Content to write' }
       },
       required: ['path', 'content']
+    }
+  },
+  {
+    name: 'edit_file',
+    description: 'Edit an existing file by replacing an exact text block. Provide the exact text to find (including indentation and line breaks) and its replacement. The search text must match exactly once unless replace_all is true. Preferred over write_file for modifying existing files.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'File path' },
+        search: { type: 'string', description: 'Exact existing text to find (must match exactly, including whitespace)' },
+        replace: { type: 'string', description: 'Text to replace it with' },
+        replace_all: { type: 'boolean', description: 'Replace every occurrence instead of requiring a unique match. Default false.' }
+      },
+      required: ['path', 'search', 'replace']
     }
   },
   {
@@ -157,6 +171,54 @@ function nativeGrep(dir: string, pattern: string): string[] {
   return results;
 }
 
+/** 加锁安全写入（含 3 次重试）；无 agentId 时直接写 */
+async function writeWithLock(filePath: string, content: string, agentId?: string): Promise<void> {
+  if (!agentId) {
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return;
+  }
+  let attempts = 0;
+  let lastErr: any;
+  while (attempts < 3) {
+    try {
+      await fslock().acquireWrite(filePath, agentId);
+      fslock().writeFile(filePath, agentId, content);
+      return;
+    } catch (err: any) {
+      lastErr = err;
+      attempts++;
+      if (attempts < 3) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    } finally {
+      fslock().release(filePath, agentId);
+    }
+  }
+  throw lastErr;
+}
+
+function emitFileEvents(filePath: string, fileExisted: boolean): void {
+  workflowEvents.emit('fileChanged', {
+    type: fileExisted ? 'Modified' : 'Added',
+    path: filePath
+  });
+  if (filePath.endsWith('.html') || filePath.endsWith('.css') || filePath.endsWith('.js')) {
+    workflowEvents.emit('previewUpdated', { path: filePath });
+  }
+}
+
+/** 统计 search 在 content 中的出现次数（非重叠） */
+function countOccurrences(content: string, search: string): number {
+  if (search.length === 0) return 0;
+  let count = 0;
+  let idx = content.indexOf(search);
+  while (idx !== -1) {
+    count++;
+    idx = content.indexOf(search, idx + search.length);
+  }
+  return count;
+}
+
 export async function executeBuiltinTool(name: string, args: any, agentId?: string): Promise<string> {
   try {
     switch (name) {
@@ -172,44 +234,45 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
         return content;
       }
       case 'write_file': {
-        args.path = resolveWithinRoot(args.path);
-        const fileExists = fs.existsSync(args.path);
-        if (agentId) {
-          let attempts = 0;
-          let success = false;
-          let lastErr: any;
-          while (attempts < 3 && !success) {
-            try {
-              await fslock().acquireWrite(args.path, agentId);
-              fslock().writeFile(args.path, agentId, args.content);
-              success = true;
-            } catch (err: any) {
-              lastErr = err;
-              attempts++;
-              if (attempts < 3) {
-                await new Promise(r => setTimeout(r, 1000));
-              }
-            } finally {
-              fslock().release(args.path, agentId);
-            }
-          }
-          if (!success) {
-            throw lastErr;
-          }
-        } else {
-          fs.writeFileSync(args.path, args.content, 'utf-8');
+        const safePath = resolveWithinRoot(args.path);
+        const fileExists = fs.existsSync(safePath);
+        await writeWithLock(safePath, args.content, agentId);
+        emitFileEvents(safePath, fileExists);
+        return `Successfully wrote to ${safePath}`;
+      }
+      case 'edit_file': {
+        const safePath = resolveWithinRoot(args.path);
+        if (!fs.existsSync(safePath)) {
+          return `Edit failed: ${safePath} does not exist. Use write_file to create new files.`;
         }
-        
-        workflowEvents.emit('fileChanged', { 
-          type: fileExists ? 'Modified' : 'Added', 
-          path: args.path 
-        });
+        const search: string = args.search ?? '';
+        const replace: string = args.replace ?? '';
+        if (search.length === 0) {
+          return 'Edit failed: "search" must be a non-empty string.';
+        }
+        if (search === replace) {
+          return 'Edit failed: "search" and "replace" are identical — nothing to change.';
+        }
 
-        if (args.path.endsWith('.html') || args.path.endsWith('.css') || args.path.endsWith('.js')) {
-          workflowEvents.emit('previewUpdated', { path: args.path });
+        const original = fs.readFileSync(safePath, 'utf-8');
+        const occurrences = countOccurrences(original, search);
+        if (occurrences === 0) {
+          return `Edit failed: search text not found in ${safePath}. ` +
+            `The text must match EXACTLY, including indentation, whitespace and line breaks. ` +
+            `Read the file again and copy the target text verbatim.`;
         }
-        
-        return `Successfully wrote to ${args.path}`;
+        if (occurrences > 1 && !args.replace_all) {
+          return `Edit failed: search text matches ${occurrences} locations in ${safePath}. ` +
+            `Either include more surrounding lines to make the match unique, or set replace_all to true.`;
+        }
+
+        const updated = args.replace_all
+          ? original.split(search).join(replace)
+          : original.replace(search, replace);
+        await writeWithLock(safePath, updated, agentId);
+        emitFileEvents(safePath, true);
+        const replacedCount = args.replace_all ? occurrences : 1;
+        return `Successfully replaced ${replacedCount} occurrence${replacedCount > 1 ? 's' : ''} in ${safePath}`;
       }
       case 'search_web':
         const searchResults = await search(args.query);

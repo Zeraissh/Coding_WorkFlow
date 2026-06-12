@@ -55,6 +55,7 @@
     "duck-duck-scrape": "^2.2.7",
     "express": "^5.2.1",
     "hnswlib-node": "^3.0.0",
-    "openai": "^6.42.0"
+    "openai": "^6.42.0",
+    "zod": "^4.4.3"
   }
 }

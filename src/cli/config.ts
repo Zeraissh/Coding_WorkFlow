@@ -23,9 +23,10 @@ export async function runConfigCLI() {
   let modelOptions: { value: string, label: string }[] = [];
   if (provider === 'anthropic') {
     modelOptions = [
-      { value: 'claude-3-5-sonnet-20241022', label: 'claude-3-5-sonnet-20241022' },
-      { value: 'claude-3-opus-20240229', label: 'claude-3-opus' },
-      { value: 'claude-3-haiku-20240307', label: 'claude-3-haiku' }
+      { value: 'claude-fable-5', label: 'claude-fable-5 (最新旗舰)' },
+      { value: 'claude-opus-4-8', label: 'claude-opus-4-8' },
+      { value: 'claude-sonnet-4-6', label: 'claude-sonnet-4-6 (推荐：性价比)' },
+      { value: 'claude-haiku-4-5-20251001', label: 'claude-haiku-4-5 (轻量快速)' }
     ];
   } else if (provider === 'deepseek') {
     modelOptions = [

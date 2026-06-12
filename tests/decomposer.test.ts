@@ -88,6 +88,38 @@ describe('Decomposer.decompose', () => {
     expect(task.expectedOutput).toBe('');
   });
 
+  it('drops malformed items but keeps valid ones (schema validation)', async () => {
+    const { decomposer } = makeDecomposer([
+      asJsonBlock([
+        { id: 'good', description: 'valid task' },
+        { description: 'missing id' } as any,
+        { id: 'no-desc' } as any,
+        { id: 123, description: 456, estimatedComplexity: '7' } as any, // 可强转 → 保留
+      ]),
+    ]);
+
+    const result = await decomposer.decompose('goal');
+    expect(result.subtasks.map(t => t.id).sort()).toEqual(['123', 'good']);
+    expect(result.subtasks.find(t => t.id === '123')!.estimatedComplexity).toBe(7);
+  });
+
+  it('tolerates malformed self-check output without corrupting subtasks', async () => {
+    const decomposeResponse = asJsonBlock([
+      { id: 'a', description: 'a' },
+      { id: 'b', description: 'b' },
+    ]);
+    // 自检返回了字符串数组而非对象数组 → 应整体安全降级为空自检
+    const badSelfCheck = '```json\n' + JSON.stringify({
+      missingDependencies: ['b depends on a'],
+      fileConflicts: 'none',
+    }) + '\n```';
+
+    const { decomposer } = makeDecomposer([decomposeResponse, badSelfCheck], { enableSelfCheck: true });
+    const result = await decomposer.decompose('goal');
+    expect(result.subtasks).toHaveLength(2);
+    expect(result.subtasks.every(t => t.dependencies.length === 0)).toBe(true);
+  });
+
   it('applies self-check missing dependencies when enabled', async () => {
     const decomposeResponse = asJsonBlock([
       { id: 'a', description: 'a' },

@@ -2,7 +2,20 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [Unreleased] — P2 核心竞争力
+
+### Added
+- **`edit_file` 工具**：精确 search/replace 块编辑（唯一匹配校验 + `replace_all`），失败时返回可操作的纠错指引；`write_file` 定位收窄为新建/全量覆写
+- **流式输出**：`askLLM` 全面 streaming（Anthropic stream helper / OpenAI chunk 累积），新增 `assistantDelta` 事件实时推送到 Dashboard 任务卡
+- **E-Stop**：`src/core/abort.ts` 工作流级 AbortController 贯穿 orchestrator→agent→LLM；`POST /api/stop`；批次边界安全停止且状态可 resume；Dashboard 红色 Stop 按钮
+- **SSE 可靠性**：服务端 15s 心跳；前端断线指数退避重连（1s→30s 封顶）+ 连接状态指示器，重连后由事件历史重放重建状态
+- **zod schema 校验**：decomposer 子任务与自检 JSON 输出经 `orchestrator/schemas.ts` 校验，非法条目丢弃并走既有重试/兜底链路
+- **配置化参数**：`agentConfig.maxToolCalls`（默认 25）、`agentConfig.parallelPoolSize`（默认 5）收编进 `~/.workflow_config.json`
+
+### Changed
+- 默认模型更新为 `claude-sonnet-4-6`；CLI 配置向导模型列表更新到当前模型族（claude-fable-5 / opus-4-8 / haiku-4.5）
+
+## [Unreleased] — P0/P1 加固
 
 ### Security
 - 内置工具新增路径越界防护：`read_file`/`write_file`/`list_dir`/`grep_search` 强制限制在项目根目录内（`src/core/security.ts`）
