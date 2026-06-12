@@ -5,6 +5,7 @@ import { SemanticReviewer, generateSummary } from './verifier/semanticReviewer';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
+import { workflowEvents } from './events';
 
 const execAsync = promisify(exec);
 
@@ -75,6 +76,16 @@ export class Verifier {
         // 语义审查失败不阻塞
       }
     }
+
+    // 结构化验证报告 → Evaluator 归因 / Dashboard 展示
+    workflowEvents.emit('verificationReport', {
+      passed: autoCheckResult?.passed ?? null,
+      lintErrors: autoCheckResult?.lintErrors.length ?? 0,
+      typeErrors: autoCheckResult?.typeErrors.length ?? 0,
+      fileConflicts: autoCheckResult?.fileConflicts.length ?? 0,
+      interfaceMismatches: autoCheckResult?.interfaceMismatches.length ?? 0,
+      semanticIssues: semanticIssues.length,
+    });
 
     // --- 最终 LLM 合成 ---
     const autoCheckSummary = autoCheckResult

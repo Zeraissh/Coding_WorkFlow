@@ -10,6 +10,7 @@ interface Task {
   tokensSpent?: number;
   filesChanged?: string[];
   streamText?: string;
+  focusScore?: number;
 }
 
 interface ApprovalRequest {
@@ -17,6 +18,18 @@ interface ApprovalRequest {
   taskId: string;
   toolName: string;
   arguments: any;
+}
+
+interface ClarifyOption {
+  label: string;
+  rationale: string;
+  recommended: boolean;
+}
+
+interface ClarifyRequest {
+  reqId: string;
+  goal: string;
+  questions: { id: string; question: string; options: ClarifyOption[] }[];
 }
 
 const API_BASE = 'http://localhost:3000/api';
@@ -33,6 +46,8 @@ function App() {
   const [plugins, setPlugins] = useState<string[]>([]);
   const [memory, setMemory] = useState<string>('');
   const [connection, setConnection] = useState<'connected' | 'reconnecting'>('reconnecting');
+  const [clarify, setClarify] = useState<ClarifyRequest | null>(null);
+  const [clarifyChoices, setClarifyChoices] = useState<Record<string, string>>({});
   const reconnectAttempt = useRef(0);
 
   useEffect(() => {
@@ -182,6 +197,24 @@ function App() {
       setWorkflowStatus('completed');
     });
 
+    es.addEventListener('focusUpdate', (e) => {
+      const data = JSON.parse(e.data);
+      if (!data.taskId) return;
+      setTasks(prev => prev.map(t => t.id === data.taskId ? { ...t, focusScore: data.score } : t));
+    });
+
+    es.addEventListener('clarificationRequested', (e) => {
+      const data = JSON.parse(e.data);
+      setClarify(data);
+      // 预选推荐项
+      const defaults: Record<string, string> = {};
+      for (const q of data.questions) {
+        const rec = q.options.find((o: ClarifyOption) => o.recommended) ?? q.options[0];
+        if (rec) defaults[q.id] = rec.label;
+      }
+      setClarifyChoices(defaults);
+    });
+
     es.addEventListener('workflowStopped', (e) => {
       const data = JSON.parse(e.data);
       setFinalResult(`🛑 Workflow stopped: ${data.reason}. Progress saved — resumable via CLI.`);
@@ -209,6 +242,22 @@ function App() {
       eventSource?.close();
     };
   }, []);
+
+  const submitClarification = async () => {
+    if (!clarify) return;
+    const answers = clarify.questions.map(q => ({
+      questionId: q.id,
+      choice: clarifyChoices[q.id] ?? q.options[0]?.label ?? '',
+      assumed: false,
+    }));
+    await fetch(`${API_BASE}/clarify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reqId: clarify.reqId, answers })
+    });
+    setClarify(null);
+    setClarifyChoices({});
+  };
 
   const handleApprove = async (reqId: string, approved: boolean) => {
     await fetch(`${API_BASE}/approve`, {
@@ -282,6 +331,13 @@ function App() {
             <div className="task-header">
               <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{task.id}</h3>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                {task.focusScore !== undefined && task.focusScore < 100 && (
+                  <span title="专注度：检测到越界写入/循环/空转时下降" style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '12px',
+                    background: task.focusScore >= 75 ? 'rgba(16,185,129,0.2)' : task.focusScore >= 50 ? 'rgba(245,158,11,0.2)' : 'rgba(220,38,38,0.2)',
+                    color: task.focusScore >= 75 ? '#10b981' : task.focusScore >= 50 ? '#f59e0b' : '#ef4444' }}>
+                    🎯 {task.focusScore}
+                  </span>
+                )}
                 {task.tokensSpent !== undefined && (
                   <span style={{ fontSize: '0.8rem', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '2px 8px', borderRadius: '12px' }}>
                     {task.tokensSpent.toLocaleString()} Tokens
@@ -349,6 +405,40 @@ function App() {
         )}
       </div>
       </div>
+
+      {clarify && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '640px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <h2 style={{ margin: '0 0 0.5rem', color: '#60a5fa' }}>🔍 需求澄清</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+              目标「{clarify.goal}」较复杂，请确认以下关键决策（选项依据来自市场与开源项目调研）：
+            </p>
+            {clarify.questions.map(q => (
+              <div key={q.id} style={{ marginBottom: '1.25rem' }}>
+                <p style={{ fontWeight: 600, margin: '0 0 0.5rem' }}>{q.question}</p>
+                {q.options.map(o => (
+                  <label key={o.label} style={{ display: 'block', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer',
+                    background: clarifyChoices[q.id] === o.label ? 'rgba(59,130,246,0.15)' : 'transparent',
+                    border: clarifyChoices[q.id] === o.label ? '1px solid #3b82f6' : '1px solid transparent' }}>
+                    <input
+                      type="radio"
+                      name={q.id}
+                      checked={clarifyChoices[q.id] === o.label}
+                      onChange={() => setClarifyChoices(prev => ({ ...prev, [q.id]: o.label }))}
+                      style={{ marginRight: '0.5rem' }}
+                    />
+                    <strong>{o.label}</strong>{o.recommended && <span style={{ color: '#10b981', fontSize: '0.8rem' }}> · 推荐</span>}
+                    {o.rationale && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '1.4rem' }}>{o.rationale}</div>}
+                  </label>
+                ))}
+              </div>
+            ))}
+            <div className="modal-actions">
+              <button className="btn-approve" onClick={submitClarification}>确认并继续规划</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {approvals.length > 0 && (
         <div className="modal-overlay">
