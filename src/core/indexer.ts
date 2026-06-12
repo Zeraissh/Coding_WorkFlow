@@ -16,6 +16,9 @@ export class ProjectIndexer {
   private indexPath: string;
   private metadataPath: string;
   private initialized = false;
+  /** 嵌入模型不可用（如无法访问 huggingface.co）时降级为无 RAG 模式 */
+  private disabled = false;
+  private static warnedOnce = false;
 
   constructor(private cwd: string = process.cwd(), private dim: number = 384) {
     const workflowDir = path.join(cwd, '.workflow', 'index');
@@ -27,15 +30,34 @@ export class ProjectIndexer {
   }
 
   async init() {
-    if (this.initialized) return;
+    if (this.initialized || this.disabled) return;
 
-    // 动态导入以避免原生模块急切加载导致的崩溃
-    const { pipeline } = await import('@xenova/transformers');
-    const hnswlib = (await import('hnswlib-node')).default;
+    try {
+      // 动态导入以避免原生模块急切加载导致的崩溃
+      const transformers = await import('@xenova/transformers');
+      const hnswlib = (await import('hnswlib-node')).default;
 
-    this.index = new hnswlib.HierarchicalNSW('cosine', this.dim);
-    this.extractFeatures = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    
+      // 国内/受限网络支持：HF_ENDPOINT=https://hf-mirror.com 切换模型下载源
+      if (process.env.HF_ENDPOINT) {
+        (transformers.env as any).remoteHost = process.env.HF_ENDPOINT;
+      }
+
+      this.index = new hnswlib.HierarchicalNSW('cosine', this.dim);
+      this.extractFeatures = await transformers.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    } catch (e: any) {
+      // 嵌入模型加载失败（典型原因：huggingface.co 不可达）→ 降级为无 RAG 模式，绝不让工作流崩溃
+      this.disabled = true;
+      if (!ProjectIndexer.warnedOnce) {
+        ProjectIndexer.warnedOnce = true;
+        console.warn(
+          `[indexer] Embedding model unavailable (${(e.message || '').slice(0, 80)}). ` +
+          `Semantic RAG disabled for this run. ` +
+          `Tip: if huggingface.co is blocked, set HF_ENDPOINT=https://hf-mirror.com`
+        );
+      }
+      return;
+    }
+
     if (fs.existsSync(this.indexPath) && fs.existsSync(this.metadataPath)) {
       try {
         const metadata = JSON.parse(fs.readFileSync(this.metadataPath, 'utf-8'));
@@ -61,6 +83,7 @@ export class ProjectIndexer {
 
   async scanAndIndex() {
     await this.init();
+    if (this.disabled) return; // 嵌入不可用 → 无 RAG 模式
     if (this.numElements > 0) return; // 已经建过索引
     
     workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Building local code index for RAG (this may take a moment)...' });
@@ -104,7 +127,7 @@ export class ProjectIndexer {
 
   async search(query: string, topK: number = 3): Promise<CodeChunk[]> {
     await this.init();
-    if (this.numElements === 0) return [];
+    if (this.disabled || this.numElements === 0) return [];
     
     const embedding = await this.getEmbedding(query);
     const result = this.index.searchKnn(embedding, Math.min(topK, this.numElements));
