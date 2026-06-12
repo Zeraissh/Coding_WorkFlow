@@ -548,9 +548,10 @@ Return ONLY valid JSON.`;
     }
 
     // --- Human-in-the-Loop Review ---
+    // requireApproval=false（无人值守/批跑模式）时跳过人工终审，否则会永久挂起
     const { gitDiffCheck } = await import('../tools/git_tool');
     const diffText = await gitDiffCheck();
-    if (diffText && diffText.trim().length > 0) {
+    if (GlobalConfig.get().requireApproval && diffText && diffText.trim().length > 0) {
       workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Waiting for User Approval via Dashboard...' });
       
       const approved = await new Promise<boolean>((resolve) => {
