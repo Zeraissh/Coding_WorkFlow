@@ -62,6 +62,8 @@ program
       
       console.log(`\n=== Final Synthesized Output ===`);
       console.log(result);
+      // Dashboard 服务器会让事件循环常驻；批跑/脚本模式必须显式退出
+      process.exit(0);
     } catch (err) {
       console.error("Workflow execution failed:", err);
       process.exit(1);
