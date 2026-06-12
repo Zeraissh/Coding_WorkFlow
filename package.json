@@ -13,7 +13,9 @@
     "bin",
     "src",
     "README.md",
-    "USAGE.md"
+    "README.zh-CN.md",
+    "USAGE.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20"
@@ -28,7 +30,18 @@
     "type": "git",
     "url": "git+https://github.com/Zeraissh/Coding_WorkFlow.git"
   },
-  "keywords": [],
+  "keywords": [
+    "agent",
+    "multi-agent",
+    "llm",
+    "orchestration",
+    "coding-agent",
+    "mcp",
+    "anthropic",
+    "claude",
+    "workflow",
+    "autonomous"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {

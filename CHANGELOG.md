@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — P3 分发（MCP server、发布流水线、双语文档）
+
+### Added
+- **MCP server 模式**：`autocode mcp-serve`——引擎本身暴露为 MCP server（stdio），Claude Code/Cursor 可直接调用 `run_workflow`/`query_knowledge`/`list_skills`/`get_eval_summary` 四个工具；stdio 模式下 console.log 自动重定向 stderr 防止污染 JSON-RPC
+- **npm 发布流水线**：`.github/workflows/release.yml`——推送 `v*` tag 自动 typecheck+test+build+`npm publish --provenance` 并创建 GitHub Release（需配置 `NPM_TOKEN` secret）
+- **双语 README**：英文 `README.md`（主）重写，反映全部当前能力与差异化叙事；中文版迁移至 `README.zh-CN.md`（修复旧版重复段落与过时内容）
+- package.json 补充 keywords 与 files（npm 检索与打包完整性）
+
 ## [Unreleased] — P2 收尾（repo map、上下文压缩、重度干预）
 
 ### Added

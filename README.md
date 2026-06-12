@@ -1,117 +1,133 @@
-# 动态工作流 (Dynamic Workflow)
+# Coding Workflow (`autocode`)
 
-本项目受 Claude 的“动态工作流”架构启发，使用 Node.js 和 TypeScript 构建了一个基于大模型 (LLM) 的多 Agent 并发协作系统。它可以自动将复杂的用户需求拆解为独立子任务，并利用多 Agent 机制并行完成所有工作流。
+[![CI](https://github.com/Zeraissh/Coding_WorkFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Zeraissh/Coding_WorkFlow/actions/workflows/ci.yml)
 
-## ✨ 核心能力
+**[中文文档 / Chinese README](README.zh-CN.md)**
 
-1. **Orchestrator（编排器）**：接收用户的复杂任务目标，自动按逻辑拆分为可独立执行的子任务。
-2. **Parallel Sub-Agents（并行子代理）**：为每个子任务独立分配 Agent 并发执行。它内置了原生工具（读写文件、终端执行、网络搜索），使得 Agent 具备真实的操作系统和代码级行动能力。
-3. **Verifier（验证与合成器）**：在所有 Agent 完成任务后，对全量执行结果进行逻辑校验和梳理，合并输出连贯的交付成果。
-4. **Human-in-the-Loop (HITL)**：可选的安全拦截机制。对 AI 的系统终端调用指令进行拦截并询问审批，确保你的系统安全。
+A **parallel multi-agent coding engine with resource governance and a self-improvement loop**. Give it a goal; it decomposes the goal into a task DAG, executes sub-agents concurrently under file locks and token budgets, verifies the result in two phases, and learns from every run.
 
----
+Most coding agents (Aider, Cline) work sequentially. This engine's bet is different: **decompose → parallelize → govern → verify → evolve**.
 
-## 🚀 进阶更新特性（最新功能）
+## Why this engine
 
-* **🌐 多模型与多服务商支持**：完全移除了仅支持 Anthropic 的限制。现在你可以自由切换使用：
-  * **Anthropic** (如 `claude-3-5-sonnet-20241022`) 支持 Prompt Caching 提示词缓存
-  * **OpenAI** (如 `gpt-4o`)
-  * **DeepSeek** (支持最新的 `deepseek-v4-pro` 与 `deepseek-v4-flash`)
-* **🧠 DeepSeek 深度思考全支持**：配置时可自定义推理强度（Reasoning Effort）。底层自带强大的 `<thinking>` 标签剥离和逻辑链展示能力，不会阻碍系统的任务解析。
-* **🚦 高并发安全控制引擎**：内置 AsyncPool 异步线程池，防止被 LLM 服务商触发 429 频控封禁，大项目大规划下依然平稳丝滑。
-* **🛠️ 极端健壮容错机制**：具有 LLM 请求指数退避（Exponential Backoff）重试、FSLock 多代理竞态锁重试、以及极端 LLM 幻觉下 JSON 解析彻底损毁的底层 fallback 回退单任务方案。
+| Capability | What it does |
+|---|---|
+| 🔀 **Parallel sub-agents** | Goals decompose into a dependency DAG, topologically sorted into batches that run concurrently (bounded pool). `FSLock` write-mutexes prevent two agents from clobbering the same file. |
+| 💰 **Token budget governance** | Budgets allocate per-task by complexity weight with 70/85/95% watermarks. When an agent finishes early, its surplus redistributes to live agents. No more bill surprises. |
+| 🔍 **Clarify phase** | "Build a robot vacuum" is one sentence hiding firmware + host software + protocols. Complex ambiguous goals trigger research-grounded multiple-choice questions (options cite real products and GitHub projects), producing a requirements spec that becomes the planning contract. Simple goals skip this entirely. |
+| 🎯 **Focus monitoring** | Out-of-scope writes, identical-call loops, and idle burn are detected per agent. Light drift gets a refocus warning fed back to the LLM; collapse suspends tool execution. A live focus score streams to the dashboard. |
+| 📊 **Attributed evals** | Every run records per-task outcomes, verification results (lint/type/conflict/semantic counts), the active rules hash, prompt version, and matched skill — so "which change hurt quality" is a query, not a guess. |
+| 📚 **Rules & skills that evolve** | Lessons deduplicate into domain-tagged rules (stale ones retire); repeated successes draft reusable skills (LLM-drafted, **human-activated** — nothing self-modifies silently); low-win-rate skills auto-retire. |
+| 🛡 **Two-phase verification** | Rule-based `AutoChecker` (lint, types, tests, file conflicts) + LLM `SemanticReviewer`, then a synthesis pass merges everything into one coherent deliverable. |
+| 🧰 **Production hygiene** | Diff-based `edit_file` tool, streaming output, E-Stop with resumable state, SSE heartbeat + reconnect, path-traversal jail + dangerous-command blacklist, atomic state writes, context compaction for long runs. |
 
----
-
-## 🏭 工业级并发与资源控制引擎
-
-在多 Agent 并发操作的底层，系统搭载了四大核心机制保驾护航：
-
-1. **🔒 基于微任务的文件锁 (`FSLock`)**：独创的 Promise 异步队列排队机制。彻底杜绝多个 Agent 并行写入同一文件导致的竞态覆写与代码损坏，并内置超时熔断保护，支持安全的锁重入与冲突自愈排队。
-2. **💰 动态 Token 预算管家 (`Token Budget`)**：彻底告别 API 账单暴雷！Orchestrator 根据任务复杂度（权重）自动给每个 Agent 分配初始 Token 预算。带有 70%(提醒)/85%(截断)/95%(强制终止) 三级熔断预警。当有 Agent 提前完工时，其未消耗的 Token 盈余会**按剩余比例动态重分配**给其他存活的 Agent，将 API 资金利用率推向极致。
-3. **🧠 智能拓扑分解 (`Smart Decomposer`)**：Orchestrator 不仅能拆解子任务，还能精准评估每个任务的 `estimatedComplexity`（估算复杂度），并自动分析子任务间的串并行逻辑依赖 (`dependencies`)。
-4. **🕵️ 双轨制二阶验证 (`Two-phase Verifier`)**：所有 Agent 在工作时会自动打点留下精细的行动日志（`AgentExecutionLog`，涵盖修改了哪些代码、执行了哪些 Shell）。在收尾阶段，Verifier 将运用基于规则的 `AutoChecker`（验证测试、语法）与大模型驱动的 `SemanticReviewer`（验证业务语义）进行地毯式验收！
-
----
-
-## 🏭 工业级并发与资源控制引擎
-
-在多 Agent 并发操作的底层，系统搭载了四大核心机制保驾护航：
-
-1. **🔒 基于微任务的文件锁 (`FSLock`)**：独创的 Promise 异步队列排队机制。彻底杜绝多个 Agent 并行写入同一文件导致的竞态覆写与代码损坏，并内置超时死锁熔断保护，支持安全的锁重入。
-2. **💰 动态 Token 预算管家 (`Token Budget`)**：彻底告别 API 账单暴雷！Orchestrator 根据任务复杂度（权重）自动给每个 Agent 分配初始 Token 预算。带有 70%(提醒)/85%(截断)/95%(强制终止) 三级熔断预警。当有 Agent 提前完工时，其未消耗的 Token 盈余会**按剩余比例动态重分配**给其他存活的 Agent，将 API 资金利用率推向极致。
-3. **🧠 智能拓扑分解 (`Smart Decomposer`)**：Orchestrator 不仅能拆解子任务，还能精准评估每个任务的 `estimatedComplexity`（估算复杂度），并自动分析子任务间的串并行逻辑依赖 (`dependencies`)。
-4. **🕵️ 双轨制二阶验证 (`Two-phase Verifier`)**：所有 Agent 在工作时会自动打点留下精细的行动日志（`AgentExecutionLog`，涵盖修改了哪些代码、执行了哪些 Shell）。在收尾阶段，Verifier 将运用基于规则的 `AutoChecker`（验证测试、语法）与大模型驱动的 `SemanticReviewer`（验证业务语义）进行地毯式验收！
-
----
-
-## 🛠 安装与配置
-
-### 1. 克隆并安装依赖
+## Quick start
 
 ```bash
 git clone https://github.com/Zeraissh/Coding_WorkFlow.git
 cd Coding_WorkFlow
 npm install
-npm run build
+npm link            # registers the global `autocode` command
+
+autocode config     # pick provider (Anthropic / OpenAI / DeepSeek), model, API key
+cd your-project
+autocode chat       # interactive session + dashboard at http://localhost:3000
 ```
 
-### 2. 全局注册命令 (极力推荐)
-
-为了能在其他任意项目中直接使用，执行：
+One-shot mode:
 
 ```bash
-npm link
+autocode run "Find and fix the bug that drops the serial connection"
+autocode run "..." --resume    # continue an interrupted workflow
 ```
-执行完毕后，你的电脑上将永久拥有一条全新的全局命令：`autocode`。
 
-### 3. 配置模型参数
+## The dashboard
 
-在任意终端运行：
+`autocode chat`/`run` serves a live dashboard at `http://localhost:3000`:
+
+- Task kanban with per-task logs, streamed model output, token spend, and focus score
+- HITL approval modals for terminal commands and final diffs
+- Clarify-phase questionnaires with research-grounded options
+- Emergency **Stop** (state is saved; resume later), connection health indicator
+
+## Self-improvement loop
+
+```
+Clarify (requirements spec) → Focused execution (scoped rules + skills)
+        ↑                                        ↓
+Regression gate (autocode eval) ← Rules dedup/retire + skill win rates ← Attributed evals
+```
+
+- `autocode eval --label baseline` runs your regression suite (`.workflow/eval_suite/cases.json`) and diffs against the previous run — exit code 1 on regressions, CI-ready. Run it before and after any prompt/rule/skill change.
+- Skills live in `.workflow/skills/*.md` (frontmatter + prompt body) — hand-editable, keyword-matched, win-rate tracked.
+- The knowledge base (`.workflow/knowledge/`) records requirements and decisions; agents query it with the `query_knowledge` tool before guessing.
+
+## Use it from Claude Code / Cursor (MCP)
+
+Expose the engine as an MCP server:
 
 ```bash
-autocode config
+autocode mcp-serve
 ```
-它会交互式地询问你的大模型偏好（OpenAI / Anthropic / DeepSeek），你要选用的具体模型名称，以及你的 API 秘钥。配置会安全地保存在你本机的 `~/.workflow_config.json` 中。
 
----
+Tools exposed: `run_workflow`, `query_knowledge`, `list_skills`, `get_eval_summary`. Example Claude Code config:
 
-## 🎯 快速上手 (Quick Start)
+```json
+{
+  "mcpServers": {
+    "coding-workflow": { "command": "autocode", "args": ["mcp-serve"] }
+  }
+}
+```
 
-### 方式 A: 交互式 CLI (推荐日常使用)
-配置完成后，在你想要修改代码的任意文件夹中，运行：
+## Programmatic API
+
+```ts
+import { Orchestrator } from 'coding_workflow';
+
+const orchestrator = new Orchestrator();
+const result = await orchestrator.executeWorkflow('Create a CLI todo app with tests');
+```
+
+See `examples/basic-workflow.ts` and `examples/custom-tool.ts`.
+
+## Project layout
+
+```
+src/core/orchestrator.ts   # planning, clarify phase, batch scheduling, lifecycle hooks
+src/core/agent.ts          # sub-agent: tool loop, scoped rules, focus monitoring
+src/core/orchestrator/     # decomposer (DAG), clarifier, zod schemas
+src/core/verifier/         # AutoChecker + SemanticReviewer
+src/core/fslock.ts         # write mutex with reentry, queues, conflict log
+src/core/tokenBudget.ts    # weighted allocation, watermarks, rebalancing
+src/core/rules.ts          # rule lifecycle (dedup, domains, retirement)
+src/core/skills.ts         # skill registry (matching, win rates, drafting)
+src/core/knowledge.ts      # knowledge base + lexical search
+src/core/evaluator.ts      # attributed eval records
+src/core/evalSuite.ts      # regression suite (autocode eval)
+src/core/focus.ts          # drift detection + intervention ladder
+src/core/repomap.ts        # file → symbols map for planning context
+src/llm/client.ts          # Anthropic/OpenAI/DeepSeek, streaming, caching, compaction
+src/mcp/                   # MCP client integration + MCP server mode
+src/server/ + ui/          # SSE dashboard (React)
+```
+
+## Configuration
+
+`autocode config` writes `~/.workflow_config.json`. Notable sections (all optional): `orchestratorConfig`, `agentConfig` (max tool calls, pool size), `clarifyConfig` (auto mode, complexity threshold), `focusConfig` (thresholds), `budgetConfig`, `fslockConfig`, `verifierConfig`.
+
+API keys can also come from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` env vars (see `.env.example`).
+
+## Development
+
 ```bash
-autocode chat
+npm run typecheck   # tsc --noEmit
+npm run test        # vitest (171 tests)
+npm run build       # emits to dist/
 ```
-然后输入你的需求（例如：`找出这个项目里导致串口断开的 Bug 并修复它`）。
 
-### 方式 B: 编程式调用 (SDK 形式)
-请参考项目目录下的 `examples/` 文件夹：
-- `examples/basic-workflow.ts`: 演示如何通过代码直接实例化 `Orchestrator` 并执行复杂 Workflow。
-- `examples/custom-tool.ts`: 演示如何为 SubAgent 注入你自定义的本地 Tool 工具。
+CI runs the full matrix (Windows + Linux × Node 20/22) on every PR. See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
-> **内部运行过程：**
-> 1. **拆解**：Orchestrator 结构化分解为：“编写贪吃蛇核心逻辑”、“编写计分板逻辑”、“编写测试用例” 等子任务。
-> 2. **并行**：分配对应的子代理，在后台静默使用原生 `write_file` 和 `search_web` 工具，在当前目录下并行高速生成代码文件。
-> 3. **合并**：所有的代码片段完成、终端测试运行完毕后，Verifier 审查结果并将完整操作日志打印输出。
+## License
 
----
-
-## 📂 项目结构说明
-
-- `bin/autocode.js`: 全局命令行入口包裹器
-- `src/index.ts`: CLI 核心路由器（实现 `chat`、`config`、`run` 等指令）
-- `src/core/config.ts`: 本地化配置文件管理与持久化
-- `src/core/orchestrator.ts`: 任务规划拆解与全局调度器
-- `src/core/fslock.ts`: 专为多并发设计的底层文件互斥锁
-- `src/core/tokenBudget.ts`: 全局 Token 智能分配与熔断器
-- `src/core/agent.ts`: 绑定了自动 Tool Injection 的子任务代理引擎
-- `src/core/verifier.ts`: 综合校验并格式化最终答案的模块（内含 autoChecker / semanticReviewer）
-- `src/llm/client.ts`: 适配了 OpenAI、Anthropic、DeepSeek 多态 SDK 与思维链解析的基础层
-- `src/tools/builtin.ts`: 官方预装工具集（文件操作、Shell、Web）
-
----
-
-## 💡 进阶开发
-
-本项目不仅提供骨架，且自带 [MCP (Model Context Protocol)](https://github.com/modelcontextprotocol) 加载能力支持。如果你想引入数据库读取等高级工具，可通过配置向量数据库动态载入 MCP 插件 Server。欢迎拓展！
+ISC
