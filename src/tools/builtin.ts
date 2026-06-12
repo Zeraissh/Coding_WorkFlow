@@ -7,6 +7,7 @@ import { fslock } from '../core/fslock';
 import { workflowEvents } from '../core/events';
 import { ProjectIndexer } from '../core/indexer';
 import { resolveWithinRoot, assertCommandAllowed } from '../core/security';
+import { KnowledgeStore } from '../core/knowledge';
 
 const execAsync = promisify(exec);
 
@@ -90,6 +91,18 @@ export const builtinTools = [
       properties: {
         query: { type: 'string', description: 'The semantic query, e.g., "where is the orchestrator initialized?"' },
         topK: { type: 'number', description: 'Number of results to return, default 3' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    name: 'query_knowledge',
+    description: 'Query the project knowledge base (requirements specs, architecture decisions, research findings, user corrections). Use this BEFORE guessing or asking the user — prior decisions are often already recorded here.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What you want to know, e.g. "which MCU platform was chosen"' },
+        topK: { type: 'number', description: 'Number of results, default 3' }
       },
       required: ['query']
     }
@@ -292,6 +305,16 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
         const results = await indexer.search(args.query, args.topK || 3);
         if (results.length === 0) return 'No semantically related code found.';
         return results.map(r => `// File: ${r.file}\n// Starts at Line: ${r.startLine}\n${r.content}`).join('\n\n');
+      }
+      case 'query_knowledge': {
+        const store = new KnowledgeStore();
+        const hits = store.search(args.query, args.topK || 3);
+        if (hits.length === 0) {
+          return 'No matching knowledge found. The knowledge base may not cover this topic — consider asking the user or stating an explicit assumption.';
+        }
+        return hits
+          .map(h => `### ${h.docTitle} (score ${h.score.toFixed(2)})\n${h.chunk}`)
+          .join('\n\n');
       }
       case 'grep_search': {
         const targetDir = resolveWithinRoot(args.dirPath || '.');

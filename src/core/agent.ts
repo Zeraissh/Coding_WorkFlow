@@ -6,7 +6,7 @@ import { MCPClientWrapper } from '../mcp/client';
 import { Tool } from '@anthropic-ai/sdk/resources/messages.js';
 import { fslock } from './fslock';
 import { tokenBudget } from './tokenBudget';
-import { getProjectMemory } from './memory';
+import { RuleStore } from './rules';
 import { getWorkflowSignal } from './abort';
 import { GlobalConfig } from './config';
 import { FocusMonitor } from './focus';
@@ -94,9 +94,11 @@ CRITICAL INSTRUCTION (SELF-CORRECTION):
 - You are allowed a maximum of 3 failed attempts to fix errors before you must give up and return the best partial result.
 Please provide the best possible output for this sub-task.`;
 
-    const projectMemory = getProjectMemory();
-    const finalSystemPrompt = projectMemory 
-      ? systemPrompt + `\n\nProject Memory (Strictly follow these rules):\n${projectMemory}`
+    // 作用域注入（C.3）：只注入通用规则 + 与任务描述域匹配的规则子集，
+    // 替代全量 Project Memory，降低 token 成本与上下文稀释
+    const scopedRules = new RuleStore().getRulesForTask(task.description);
+    const finalSystemPrompt = scopedRules.length > 0
+      ? systemPrompt + `\n\nProject Rules (Strictly follow — selected for this task):\n${scopedRules.map(r => `- ${r.text}`).join('\n')}`
       : systemPrompt;
 
     const activeMcpClients: MCPClientWrapper[] = [];
