@@ -69,6 +69,52 @@ program
   });
 
 program
+  .command('eval')
+  .description('Run the regression eval suite (.workflow/eval_suite/cases.json) and compare with the previous run')
+  .option('-l, --label <label>', 'Label for this run (e.g. "after-rule-change")', '')
+  .action(async (options: { label: string }) => {
+    const { EvalSuite } = await import('./core/evalSuite');
+    const suite = new EvalSuite();
+    const cases = suite.loadCases();
+    if (cases.length === 0) {
+      console.log('No eval cases found. Add cases to .workflow/eval_suite/cases.json:');
+      console.log(JSON.stringify([{
+        id: 'example',
+        goal: 'Create hello.py that prints hello world',
+        assertions: [
+          { type: 'file_exists', path: 'hello.py' },
+          { type: 'file_contains', path: 'hello.py', text: 'hello world' },
+        ],
+      }], null, 2));
+      return;
+    }
+
+    console.log(`Running ${cases.length} eval case(s)...\n`);
+    const orchestrator = new Orchestrator();
+    const result = await suite.run((goal) => orchestrator.executeWorkflow(goal), options.label);
+
+    console.log(`\n=== Eval Suite Result ===`);
+    console.log(`Passed: ${result.passed}/${result.total}`);
+    for (const r of result.results) {
+      console.log(`  ${r.passed ? '✅' : '❌'} ${r.caseId} (${(r.durationMs / 1000).toFixed(1)}s)`);
+      for (const f of r.failures) console.log(`      ${f}`);
+    }
+
+    const comparison = suite.compareWithPrevious();
+    if (comparison?.previous) {
+      console.log(`\n=== vs Previous Run (${comparison.previous.label || new Date(comparison.previous.timestamp).toISOString()}) ===`);
+      console.log(`Pass rate: ${comparison.previous.passed}/${comparison.previous.total} → ${result.passed}/${result.total}`);
+      if (comparison.regressions.length > 0) {
+        console.log(`⚠ REGRESSIONS: ${comparison.regressions.join(', ')}`);
+        process.exitCode = 1;
+      }
+      if (comparison.improvements.length > 0) {
+        console.log(`✨ Improvements: ${comparison.improvements.join(', ')}`);
+      }
+    }
+  });
+
+program
   .command('config')
   .description('Configure LLM provider, model, and API keys')
   .action(async () => {

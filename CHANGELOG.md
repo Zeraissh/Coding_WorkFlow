@@ -2,6 +2,13 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — P2.5 进化能力（第三批）
+
+### Added
+- **Skill 注册表（A.3）**：`src/core/skills.ts`——`.workflow/skills/<id>.md`（JSON frontmatter + 正文，对齐社区 SKILL.md 习惯）；关键词触发自动匹配（中英文混合），命中的领域上下文注入分解；**胜率闭环**：工作流成败回写 uses/wins，样本 ≥5 且胜率 <50% 自动退役（`skillRetired` 事件）；**自动起草**：≥3 个相似成功目标且无 skill 覆盖时由 LLM 起草草稿（draft 状态 + `skillDraftProposed` 事件，HITL 激活后才生效，绝不静默上线）
+- **回归评测集（A.4）**：`src/core/evalSuite.ts`——`.workflow/eval_suite/cases.json` 用例（file_exists / file_contains / command_succeeds 断言）；新 CLI 命令 `autocode eval [--label]`：跑全套用例、保留最近 20 次历史、与上一次运行对比输出**回归/改进清单**（出现回归时退出码 1，可直接进 CI）——提示词/规则/skill 变更的影子验证底座
+- Eval 归因补全（A.5 部分）：`EvalRecord.skillId` 记录本次命中的 skill，per-skill 胜率可追溯
+
 ## [Unreleased] — P2.5 进化能力（第二批）
 
 ### Added
