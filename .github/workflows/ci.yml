@@ -22,7 +22,10 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
+      - if: runner.os == 'Windows'
+        run: npm ci --ignore-scripts
+      - if: runner.os != 'Windows'
+        run: npm ci
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
