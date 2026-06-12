@@ -14,6 +14,7 @@ import { getProjectMemory, extractLessons } from './memory';
 import { gitCreateBranch, gitCommitAll } from '../tools/git_tool';
 import { ProjectIndexer } from './indexer';
 import { StateManager, WorkflowState } from './stateManager';
+import { beginWorkflowAbortScope, endWorkflowAbortScope, isWorkflowStopped } from './abort';
 import { SnapshotManager } from './snapshotManager';
 import { MCPRegistry } from '../mcp/registry';
 import { PluginManager } from './pluginManager';
@@ -243,6 +244,15 @@ Return ONLY valid JSON.`;
    * @returns {Promise<string>} The final verified summary string describing the outcome.
    */
   async executeWorkflow(goal: string, options?: { resume?: boolean }): Promise<string> {
+    beginWorkflowAbortScope();
+    try {
+      return await this.executeWorkflowInner(goal, options);
+    } finally {
+      endWorkflowAbortScope();
+    }
+  }
+
+  private async executeWorkflowInner(goal: string, options?: { resume?: boolean }): Promise<string> {
     const stateManager = new StateManager();
     let state = options?.resume ? stateManager.loadState() : null;
 
@@ -309,6 +319,17 @@ Return ONLY valid JSON.`;
     const batches = plan.parallelBatches || [plan.tasks];
 
     for (let batchIndex = startBatchIndex; batchIndex < batches.length; batchIndex++) {
+      // --- E-Stop 检查：批次边界是安全停止点，状态已落盘可 resume ---
+      if (isWorkflowStopped()) {
+        state!.status = 'failed';
+        stateManager.saveState(state!);
+        workflowEvents.emit('log', {
+          taskId: 'orchestrator',
+          message: '🛑 Workflow stopped by user. State saved — use resume to continue.',
+        });
+        return 'Workflow stopped by user before batch ' + (batchIndex + 1) + '. Progress saved, resumable.';
+      }
+
       const batch = batches[batchIndex]!;
       workflowEvents.emit('log', {
         taskId: 'orchestrator',
@@ -317,7 +338,8 @@ Return ONLY valid JSON.`;
 
       const batchAgents: SubAgent[] = [];
 
-      const batchResults = await asyncPool(5, batch!, async (task) => {
+      const poolSize = GlobalConfig.get().agentConfig?.parallelPoolSize ?? 5;
+      const batchResults = await asyncPool(poolSize, batch!, async (task) => {
         workflowEvents.emit('log', { taskId: task.id, message: `Retrieving tools...` });
         const tools = await retriever.getRelevantTools(task.description);
         workflowEvents.emit('taskStarted', { taskId: task.id, description: task.description });

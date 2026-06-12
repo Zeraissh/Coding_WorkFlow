@@ -6,6 +6,7 @@ import { workflowEvents } from '../core/events';
 import { GlobalConfig } from '../core/config';
 import { PluginManager } from '../core/pluginManager';
 import { getProjectMemory } from '../core/memory';
+import { stopWorkflow } from '../core/abort';
 
 import { fileURLToPath } from 'url';
 
@@ -37,6 +38,14 @@ workflowEvents.on('taskCompleted', (data) => broadcastSSE('taskCompleted', data)
 workflowEvents.on('workflowCompleted', (data) => broadcastSSE('workflowCompleted', data));
 workflowEvents.on('llmUsageReport', (data) => broadcastSSE('llmUsageReport', data));
 workflowEvents.on('fileChanged', (data) => broadcastSSE('fileChanged', data));
+workflowEvents.on('workflowStopped', (data) => broadcastSSE('workflowStopped', data));
+// 流式增量不进 eventHistory（量大且回放无意义），只对在线客户端直推
+workflowEvents.on('assistantDelta', (data) => {
+  sseClients.forEach(client => {
+    client.res.write(`event: assistantDelta\n`);
+    client.res.write(`data: ${JSON.stringify(data)}\n\n`);
+  });
+});
 workflowEvents.on('approvalRequested', (data) => {
   const reqId = Date.now().toString() + Math.random().toString();
   pendingApprovals.set(reqId, { resolve: data.resolve, reject: data.reject });
@@ -87,9 +96,20 @@ app.get('/api/stream', (req, res) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   });
 
+  // 心跳：防止代理/浏览器静默断开，客户端据此检测连接健康
+  const heartbeat = setInterval(() => {
+    res.write(`: ping ${Date.now()}\n\n`);
+  }, 15000);
+
   req.on('close', () => {
+    clearInterval(heartbeat);
     sseClients = sseClients.filter(c => c.id !== clientId);
   });
+});
+
+app.post('/api/stop', (req, res) => {
+  const stopped = stopWorkflow(req.body?.reason || 'Stopped from dashboard');
+  res.json({ stopped });
 });
 
 app.post('/api/config', (req, res) => {

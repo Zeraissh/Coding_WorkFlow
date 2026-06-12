@@ -15,6 +15,7 @@ import {
   buildDecompositionPrompt,
   buildSelfCheckPrompt,
 } from './templates';
+import { SubtaskItemSchema, SelfCheckSchema } from './schemas';
 
 // ============================================================================
 // Types
@@ -172,34 +173,17 @@ export class Decomposer {
 
     if (!Array.isArray(json)) return [];
 
+    // zod 校验每个条目：形状非法的条目丢弃（触发上层重试/兜底），合法条目宽容归一化
     return json
-      .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
-      .map((item) => this.normalizeSubtask(item))
+      .map((item) => {
+        const parsed = SubtaskItemSchema.safeParse(item);
+        if (!parsed.success) return null;
+        return {
+          ...parsed.data,
+          estimatedComplexity: this.clamp(parsed.data.estimatedComplexity || 5, 1, 10),
+        } satisfies Subtask;
+      })
       .filter((t): t is Subtask => t !== null);
-  }
-
-  private normalizeSubtask(item: Record<string, unknown>): Subtask | null {
-    if (!item.id || !item.description) return null;
-
-    return {
-      id: String(item.id),
-      description: String(item.description),
-      estimatedComplexity: this.clamp(
-        Number(item.estimatedComplexity) || 5,
-        1,
-        10
-      ),
-      dependencies: Array.isArray(item.dependencies)
-        ? item.dependencies.map(String)
-        : [],
-      isolatedFiles: Array.isArray(item.isolatedFiles)
-        ? item.isolatedFiles.map(String)
-        : [],
-      sharedFiles: Array.isArray(item.sharedFiles)
-        ? item.sharedFiles.map(String)
-        : [],
-      expectedOutput: String(item.expectedOutput || ''),
-    };
   }
 
   /**
@@ -215,16 +199,20 @@ export class Decomposer {
     const jsonMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
     const jsonStr = (jsonMatch?.[1] ?? response).trim();
 
+    const empty: SelfCheckResult = {
+      missingDependencies: [],
+      fileConflicts: [],
+      overlyCoarse: [],
+      overlyFine: [],
+      warnings: [],
+    };
+
     try {
-      return JSON.parse(jsonStr);
+      // zod 校验：非法形状不再原样透传，缺字段补默认值
+      const parsed = SelfCheckSchema.safeParse(JSON.parse(jsonStr));
+      return parsed.success ? parsed.data : empty;
     } catch {
-      return {
-        missingDependencies: [],
-        fileConflicts: [],
-        overlyCoarse: [],
-        overlyFine: [],
-        warnings: [],
-      };
+      return empty;
     }
   }
 

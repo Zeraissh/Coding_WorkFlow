@@ -7,6 +7,8 @@ import { Tool } from '@anthropic-ai/sdk/resources/messages.js';
 import { fslock } from './fslock';
 import { tokenBudget } from './tokenBudget';
 import { getProjectMemory } from './memory';
+import { getWorkflowSignal } from './abort';
+import { GlobalConfig } from './config';
 import { MCPRegistry } from '../mcp/registry';
 import { workflowEvents } from './events';
 
@@ -101,7 +103,7 @@ Please provide the best possible output for this sub-task.`;
     const toolExecutors = new Map<string, (args: any) => Promise<string>>();
 
     let toolCallCount = 0;
-    const MAX_TOOL_CALLS = 25;
+    const MAX_TOOL_CALLS = GlobalConfig.get().agentConfig?.maxToolCalls ?? 25;
 
     try {
       // 1. Always inject built-in tools (read_file, write_file, run_terminal_command, etc.)
@@ -113,13 +115,13 @@ Please provide the best possible output for this sub-task.`;
         });
         toolExecutors.set(tool.name, async (args) => {
           // 记录文件操作
-          if (tool.name === 'write_file') {
+          if (tool.name === 'write_file' || tool.name === 'edit_file') {
             this.executionLog.files.push({
               agentId: this.agentId,
               subtaskId: task.id,
               operation: 'write',
               filePath: args.path,
-              content: args.content,
+              content: tool.name === 'edit_file' ? args.replace : args.content,
               timestamp: Date.now(),
             });
           } else if (tool.name === 'read_file') {
@@ -190,7 +192,7 @@ Please provide the best possible output for this sub-task.`;
             const result = await executor(input);
             if (task.id) {
               workflowEvents.emit('log', { taskId: task.id, message: `[${this.agentId}] [Tool Result] ${result.slice(0, 100)}...` });
-              if (name === 'write_file' || name === 'replace_file_content' || name === 'multi_replace_file_content') {
+              if (name === 'write_file' || name === 'edit_file' || name === 'replace_file_content' || name === 'multi_replace_file_content') {
                 try {
                   const args = typeof input === 'string' ? JSON.parse(input) : input;
                   const filePath = args.TargetFile || args.path;
@@ -206,7 +208,8 @@ Please provide the best possible output for this sub-task.`;
         },
         0.7,
         task.id,
-        this.agentId
+        this.agentId,
+        { signal: getWorkflowSignal() }
       );
 
       this.executionLog.llmCalls++;
