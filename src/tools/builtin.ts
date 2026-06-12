@@ -6,6 +6,7 @@ import * as path from 'path';
 import { fslock } from '../core/fslock';
 import { workflowEvents } from '../core/events';
 import { ProjectIndexer } from '../core/indexer';
+import { resolveWithinRoot, assertCommandAllowed } from '../core/security';
 
 const execAsync = promisify(exec);
 
@@ -23,7 +24,7 @@ export const builtinTools = [
   },
   {
     name: 'read_file',
-    description: 'Read contents of a file on the local machine.',
+    description: 'Read contents of a file. Paths must stay within the project root directory.',
     input_schema: {
       type: 'object',
       properties: {
@@ -34,7 +35,7 @@ export const builtinTools = [
   },
   {
     name: 'write_file',
-    description: 'Write content to a local file.',
+    description: 'Write content to a file. Paths must stay within the project root directory.',
     input_schema: {
       type: 'object',
       properties: {
@@ -160,15 +161,18 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
   try {
     switch (name) {
       case 'run_terminal_command':
+        assertCommandAllowed(args.command);
         const { stdout, stderr } = await execAsync(args.command);
         return `STDOUT:\n${stdout}\nSTDERR:\n${stderr}`;
       case 'read_file': {
-        if (agentId) await fslock().acquireRead(args.path, agentId);
-        const content = fs.readFileSync(args.path, 'utf-8');
-        if (agentId) fslock().release(args.path, agentId);
+        const safePath = resolveWithinRoot(args.path);
+        if (agentId) await fslock().acquireRead(safePath, agentId);
+        const content = fs.readFileSync(safePath, 'utf-8');
+        if (agentId) fslock().release(safePath, agentId);
         return content;
       }
       case 'write_file': {
+        args.path = resolveWithinRoot(args.path);
         const fileExists = fs.existsSync(args.path);
         if (agentId) {
           let attempts = 0;
@@ -213,7 +217,7 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
       case 'list_dir':
         try {
           const depth = args.depth || 2;
-          const targetDir = path.resolve(args.dirPath || '.');
+          const targetDir = resolveWithinRoot(args.dirPath || '.');
           const lines = safeListDir(targetDir, depth);
           return lines.length > 0 ? lines.join('\n') : 'Directory is empty or all contents were ignored.';
         } catch (e: any) {
@@ -227,7 +231,7 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
         return results.map(r => `// File: ${r.file}\n// Starts at Line: ${r.startLine}\n${r.content}`).join('\n\n');
       }
       case 'grep_search': {
-        const targetDir = path.resolve(args.dirPath || '.');
+        const targetDir = resolveWithinRoot(args.dirPath || '.');
         const results = nativeGrep(targetDir, args.pattern);
         if (results.length === 0) return `No matches found for "${args.pattern}"`;
         return results.join('\n');

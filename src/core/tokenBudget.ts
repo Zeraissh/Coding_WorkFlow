@@ -151,6 +151,8 @@ export class TokenBudgetManager {
   private agentCallCounts: Map<string, number> = new Map();
   /** 已完成任务集合（用于报表状态判定） */
   private completedTasks: Set<string> = new Set();
+  /** 已释放过剩余额度的任务集合（保证 rebalance 幂等，防止重复派发） */
+  private rebalancedTasks: Set<string> = new Set();
   /** 当 budget 未初始化时的后备消耗追踪 */
   private agentFallbackSpent: Map<string, number> = new Map();
 
@@ -183,6 +185,7 @@ export class TokenBudgetManager {
     this.agentCallCounts.clear();
     this.agentFallbackSpent.clear();
     this.completedTasks.clear();
+    this.rebalancedTasks.clear();
   }
 
   onBudgetEvent(listener: BudgetEventListener): void {
@@ -504,11 +507,15 @@ export class TokenBudgetManager {
     const allocation = this.allocations.get(subtaskId);
     if (!allocation) return;
 
+    // 该任务的剩余额度已经释放过 → 幂等返回（markCompleted 与显式调用可能重复触发）
+    if (this.rebalancedTasks.has(subtaskId)) return;
+
     const spent = this.budget.taskSpent.get(subtaskId) || 0;
     const surplus = allocation.allocatedTokens - spent;
 
     // 剩余太少不值得重分配
     if (surplus < MIN_SURPLUS_FOR_REBALANCE) return;
+    this.rebalancedTasks.add(subtaskId);
 
     // 找出还活跃的其他子任务
     const activeAllocations = Array.from(this.allocations.entries())

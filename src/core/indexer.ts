@@ -133,7 +133,9 @@ export class ProjectIndexer {
             results.push(fullPath);
           }
         }
-      } catch (e) {}
+      } catch (e: any) {
+        console.warn(`[indexer] Skipping unreadable path ${fullPath}: ${e.message}`);
+      }
     }
     return results;
   }

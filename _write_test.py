@@ -1,1 +1,0 @@
-import sys\nwith open("test_virtual_serial.py","w") as f:\n f.write("test")\n
