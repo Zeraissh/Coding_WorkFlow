@@ -24,7 +24,8 @@ jobs:
       - run: npm run test
       - run: npm run build
       # 需要在仓库 Secrets 配置 NPM_TOKEN（npmjs.com 的 Automation token）
-      - run: npm publish --provenance --access public
+      # 注意：--provenance 仅支持公开仓库；仓库转公开后可加回该参数
+      - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Create GitHub Release
