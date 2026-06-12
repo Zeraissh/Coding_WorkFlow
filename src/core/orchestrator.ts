@@ -16,6 +16,8 @@ import { ProjectIndexer } from './indexer';
 import { StateManager, WorkflowState } from './stateManager';
 import { beginWorkflowAbortScope, endWorkflowAbortScope, isWorkflowStopped } from './abort';
 import { Clarifier, ClarifyAnswer } from './orchestrator/clarifier';
+import { RuleStore } from './rules';
+import { KnowledgeStore } from './knowledge';
 import { SnapshotManager } from './snapshotManager';
 import { MCPRegistry } from '../mcp/registry';
 import { PluginManager } from './pluginManager';
@@ -165,6 +167,12 @@ export class Orchestrator {
 
     const doc = clarifier.buildRequirementsDoc(goal, questions, answers, researchNotes);
     const savedPath = clarifier.saveRequirementsDoc(doc);
+    // 同步入知识库：后续所有子 Agent 可通过 query_knowledge 检索这些决策
+    try {
+      new KnowledgeStore().addDocument(`需求规格: ${goal.slice(0, 40)}`, doc, 'clarify-phase');
+    } catch (e: any) {
+      console.warn(`[orchestrator] Failed to ingest requirements into knowledge base: ${e.message}`);
+    }
     workflowEvents.emit('log', { taskId: 'orchestrator', message: `📋 Requirements spec saved to ${savedPath}` });
 
     return doc;
@@ -470,6 +478,18 @@ Return ONLY valid JSON.`;
 
     // Memory Extraction Phase
     extractLessons(goal, agentLogs).catch(console.error);
+
+    // 规则生命周期：成功工作流刷新相关域规则的验证时间，长期未验证的进入待退役
+    try {
+      const ruleStore = new RuleStore();
+      const corpus = (goal + ' ' + plan.tasks.map(t => t.description).join(' ')).toLowerCase();
+      const touchedDomains = [...new Set(
+        ruleStore.getActive().flatMap(r => r.domains).filter(d => corpus.includes(d.toLowerCase()))
+      )];
+      ruleStore.onWorkflowCompleted(touchedDomains, results.every(r => r.success));
+    } catch (e: any) {
+      console.warn(`[orchestrator] Rule lifecycle pass failed: ${e.message}`);
+    }
 
     // --- Human-in-the-Loop Review ---
     const { gitDiffCheck } = await import('../tools/git_tool');

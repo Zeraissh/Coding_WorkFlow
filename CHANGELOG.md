@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — P2.5 进化能力（第二批）
+
+### Added
+- **规则生命周期管理（A.2）**：`src/core/rules.ts`——`.workflow/rules.json` 结构化存储（id/域标签/命中计数/最近验证/状态），替代 append-only；新教训文本归一化去重合并；连续 N 个工作流未被相关域验证的规则进入待退役（`ruleRetirementProposed` 事件，HITL 归档/复活 API）；自动迁移旧 `project_rules.md`；持续渲染 md 保持旧读取方兼容
+- **作用域上下文注入（C.3）**：子 Agent 不再全量注入 Project Memory，改为"通用规则 + 与任务描述域匹配的规则子集"（上限 12 条），降低 token 成本与上下文稀释；注入即计 hitCount 供 A.1 归因
+- **项目知识库（C.4）**：`src/core/knowledge.ts`——`.workflow/knowledge/` 文档库（frontmatter 元数据、原子写、同题更新）；中英文混合词法检索（英文词项 + 中文双字滑窗）；Clarify Phase 的需求规格自动入库；新增 `query_knowledge` 内置工具——Agent 遇到不确定先查沉淀决策再行动
+- `extractLessons` 升级：LLM 产出带域标签的结构化教训，经 RuleStore 去重入库
+
 ## [Unreleased] — P2.5 进化能力（第一批）
 
 ### Added
