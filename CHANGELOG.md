@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 治理界面（进化闭环人工环节 UI 化）
+
+### Added
+- **Dashboard skill/规则治理面板**：进化闭环此前自动起草 skill、提议退役规则，但激活草稿/退役 skill/归档规则只能手动改文件。新增 `src/core/governance.ts`（纯逻辑层，8 个单测）+ `/api/governance` 系列端点 + Dashboard 侧边栏 🧬 Governance 面板：列出 skill（状态/胜率 + activate/retire 按钮）与待退役规则（keep/archive 按钮）
+- `SkillRegistry.retireSkill(id)`：HITL 手动退役 skill（保留历史胜负计数）
+- SSE 实时转发 `skillDraftProposed`/`skillRetired`/`ruleRetirementProposed`，面板自动刷新——用户随时知道有东西待审批
+- 测试基线 192 → 200
+
 ## [Unreleased] — 核心引擎测试覆盖
 
 ### Added
