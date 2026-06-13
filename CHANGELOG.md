@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 核心引擎测试覆盖
+
+### Added
+- **核心引擎 mock-LLM 测试**（此前 orchestrator/agent/verifier 仅靠 SWE-bench 间接验证，零直接单测）：
+  - `tests/agent.test.ts`（7）：SubAgent.execute 全流程——工具组装、工具循环写文件落盘 + 执行日志记录、成功/失败结果映射、预算耗尽短路（不调 LLM）、文件锁释放、专注度越界写入触发干预
+  - `tests/orchestratorPlan.test.ts`（5）：planWorkflow——依赖排序的并行批次、独立任务同批、简单目标跳过澄清阶段、解析失败回退双任务模板、Template: 短路不调 LLM
+  - `tests/verifier.test.ts`（4）：verifyAndSynthesize 合成路径 + verificationReport 事件 + 部分失败仍合成
+- 测试基线 176 → **192**。手法：`vi.mock` 替换唯一 LLM 入口 `askLLM`、stub 嵌入索引器、临时 cwd 隔离副作用
+
 ## [Unreleased] — P3 分发（MCP server、发布流水线、双语文档）
 
 ### Added
