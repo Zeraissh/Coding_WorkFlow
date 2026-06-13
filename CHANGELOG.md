@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 并发安全：工作流互斥 + 规则注入去竞态
+
+### Fixed
+- **并行 agent 各自写 rules.json 的竞态**：`getRulesForTask` 每次调用都 `hitCount++` 并写盘，agent 在并行热路径每任务调一次——N 个并行任务 = N 个并发写、丢更新。改为：agent 用只读 `selectRulesForTask`（不写盘）+ 发 `rulesInjected` 事件；orchestrator 在工作流结束统一 `recordHits` 一次回写
+- **同进程并发工作流互踩单例**：abort/sandbox session/tokenBudget/fslock 是进程级单例，MCP server 并发收到多个 `run_workflow` 会互相踩（一个的 E-Stop 中止另一个、预算/锁混淆、沙箱会话被覆盖）。新增 `src/core/workflowLock.ts`：`executeWorkflow` 串行化，第二个调用排队等第一个跑完，把"一进程一工作流"的隐含假设显式化为安全保证
+
+### Added
+- `RuleStore.selectRulesForTask`（只读）、`recordHits`（批量去重回写）；`getRulesForTask` 标记 deprecated
+- 测试基线 → 257（工作流互斥串行化/失败不卡队列/running 状态 + 规则只读选择/批量去重 hitCount）
+
 ## [Unreleased] — 架构：共享嵌入模型（消除双份加载）
 
 ### Changed
