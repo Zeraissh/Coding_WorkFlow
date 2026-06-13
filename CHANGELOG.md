@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 知识库语义检索（词法兜底）
+
+### Added
+- **嵌入式语义检索**：`query_knowledge` 从纯词法升级为基于嵌入的语义检索。新增 `src/core/embedder.ts`——共享、惰性加载、**失败即降级**的文本嵌入（模型不可用时 `embedText` 返回 null，与全局离线韧性一致）+ `cosineSimilarity`，支持 `HF_ENDPOINT` 镜像
+- `knowledge.ts` 新增 `semanticSearch`：嵌入查询并按余弦相似度排序分块；分块嵌入缓存在 `.workflow/knowledge/.embeddings.json`（跨检索不重复计算，重复检索只嵌入查询本身）；嵌入不可用时回退既有词法检索。词法检索保留并重构为共享分块逻辑
+- `query_knowledge` 工具与 MCP server 改用 semanticSearch
+- 测试基线 → 234（cosine 纯函数 + 注入式语义排序 + 词法兜底 + 嵌入缓存）
+
 ## [Unreleased] — 测试深度：AutoChecker + SnapshotManager
 
 ### Added
