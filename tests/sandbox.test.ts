@@ -1,8 +1,13 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   buildDockerArgs,
+  buildRunDaemonArgs,
+  buildExecArgs,
   resolveSandboxConfig,
   isSandboxEnabled,
+  getSandboxSession,
+  endSandboxSession,
+  SandboxSession,
   type ResolvedSandboxConfig,
 } from '../src/core/sandbox';
 import { GlobalConfig } from '../src/core/config';
@@ -74,5 +79,51 @@ describe('resolveSandboxConfig / isSandboxEnabled', () => {
     expect(cfg.image).toBe('python:3.12');
     expect(cfg.memory).toBe('2g'); // default preserved
     expect(isSandboxEnabled()).toBe(true);
+  });
+});
+
+describe('sandbox v2 — persistent container args', () => {
+  it('buildRunDaemonArgs starts a detached, mounted, resource-capped container that stays alive', () => {
+    const args = buildRunDaemonArgs(baseConfig, '/home/me/proj', 'cw-123');
+    expect(args.slice(0, 4)).toEqual(['run', '-d', '--name', 'cw-123']);
+    expect(args.slice(-2)).toEqual(['sleep', 'infinity']); // keep-alive
+    expect(args).toContain('node:22');
+    expect(args[args.indexOf('-v') + 1]).toBe('/home/me/proj:/workspace');
+    expect(args[args.indexOf('--memory') + 1]).toBe('2g');
+    expect(args).toContain('--pids-limit');
+  });
+
+  it('buildExecArgs runs a command in /workspace as a single sh -c arg', () => {
+    const cmd = 'cd build && make && echo $PWD';
+    const args = buildExecArgs('cw-123', cmd);
+    expect(args).toEqual(['exec', '-w', '/workspace', 'cw-123', 'sh', '-c', cmd]);
+    expect(args[args.length - 1]).toBe(cmd); // no host-shell splitting
+  });
+
+  it('each session gets a unique container name', () => {
+    const a = new SandboxSession('/p').containerName;
+    const b = new SandboxSession('/p').containerName;
+    expect(a).not.toBe(b);
+    expect(a).toMatch(/^coding-workflow-/);
+  });
+});
+
+describe('sandbox v2 — session scope', () => {
+  afterEach(async () => {
+    await endSandboxSession();
+  });
+
+  it('has no active session by default', () => {
+    expect(getSandboxSession()).toBeNull();
+  });
+
+  it('endSandboxSession is safe to call with no active session', async () => {
+    await expect(endSandboxSession()).resolves.toBeUndefined();
+    expect(getSandboxSession()).toBeNull();
+  });
+
+  it('exec before start throws a SandboxError', async () => {
+    const session = new SandboxSession('/p');
+    await expect(session.exec('ls')).rejects.toThrow(/not started/);
   });
 });
