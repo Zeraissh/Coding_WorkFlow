@@ -142,3 +142,37 @@ describe('RuleStore — lifecycle & retirement', () => {
     expect(rule.id).toBe(store.getAll()[0]!.id);
   });
 });
+
+describe('RuleStore — concurrency-safe rule injection (D)', () => {
+  it('selectRulesForTask is read-only: no hitCount change, no file write', () => {
+    const store = new RuleStore(tmpDir);
+    store.addRule('general rule');
+    store.addRule('python rule', ['python']);
+
+    const sel = store.selectRulesForTask('write a python script');
+    expect(sel.map(r => r.text).sort()).toEqual(['general rule', 'python rule']);
+
+    // hitCount untouched on disk (read-only path)
+    const reloaded = new RuleStore(tmpDir);
+    expect(reloaded.getAll().every(r => r.hitCount === 0)).toBe(true);
+  });
+
+  it('recordHits bumps and persists once, deduplicating repeated ids', () => {
+    const store = new RuleStore(tmpDir);
+    const a = store.addRule('rule a', ['x']);
+    const b = store.addRule('rule b', ['y']);
+
+    store.recordHits([a.id, a.id, b.id]); // a appears twice → counts once
+
+    const reloaded = new RuleStore(tmpDir);
+    expect(reloaded.getAll().find(r => r.id === a.id)!.hitCount).toBe(1);
+    expect(reloaded.getAll().find(r => r.id === b.id)!.hitCount).toBe(1);
+  });
+
+  it('recordHits with an empty list is a no-op', () => {
+    const store = new RuleStore(tmpDir);
+    store.addRule('rule', ['x']);
+    expect(() => store.recordHits([])).not.toThrow();
+    expect(new RuleStore(tmpDir).getAll()[0]!.hitCount).toBe(0);
+  });
+});

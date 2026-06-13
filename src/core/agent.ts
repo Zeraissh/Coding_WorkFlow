@@ -95,8 +95,13 @@ CRITICAL INSTRUCTION (SELF-CORRECTION):
 Please provide the best possible output for this sub-task.`;
 
     // 作用域注入（C.3）：只注入通用规则 + 与任务描述域匹配的规则子集，
-    // 替代全量 Project Memory，降低 token 成本与上下文稀释
-    const scopedRules = new RuleStore().getRulesForTask(task.description);
+    // 替代全量 Project Memory，降低 token 成本与上下文稀释。
+    // 用只读 select（不写盘）——hitCount 由 orchestrator 在工作流结束统一回写，
+    // 避免 N 个并行 agent 各自写 rules.json 的竞态。
+    const scopedRules = new RuleStore().selectRulesForTask(task.description);
+    if (scopedRules.length > 0) {
+      workflowEvents.emit('rulesInjected', { taskId: task.id, ruleIds: scopedRules.map(r => r.id) });
+    }
     const finalSystemPrompt = scopedRules.length > 0
       ? systemPrompt + `\n\nProject Rules (Strictly follow — selected for this task):\n${scopedRules.map(r => `- ${r.text}`).join('\n')}`
       : systemPrompt;

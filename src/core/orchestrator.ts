@@ -17,6 +17,7 @@ import { StateManager, WorkflowState } from './stateManager';
 import { beginWorkflowAbortScope, endWorkflowAbortScope, isWorkflowStopped } from './abort';
 import { isSandboxEnabled, beginSandboxSession, endSandboxSession } from './sandbox';
 import { startWorkflowObservers } from './observers';
+import { runExclusiveWorkflow } from './workflowLock';
 import { Clarifier, ClarifyAnswer } from './orchestrator/clarifier';
 import { RuleStore } from './rules';
 import { KnowledgeStore } from './knowledge';
@@ -379,9 +380,20 @@ Return ONLY valid JSON.`;
    * @returns {Promise<string>} The final verified summary string describing the outcome.
    */
   async executeWorkflow(goal: string, options?: { resume?: boolean }): Promise<string> {
+    // 串行化：引擎的跨切面单例（abort/sandbox/budget/fslock）不支持同进程并发工作流，
+    // 第二个调用排队等第一个跑完（详见 workflowLock）
+    return runExclusiveWorkflow(() => this.executeWorkflowGuarded(goal, options));
+  }
+
+  private async executeWorkflowGuarded(goal: string, options?: { resume?: boolean }): Promise<string> {
     beginWorkflowAbortScope();
     // 观测/归因绑定到引擎（而非传输层），保证 CLI/SDK/MCP 三路径都采集 trace + eval
     const observers = startWorkflowObservers();
+    // 规则命中：agent 在并行热路径只读选规则并发 rulesInjected 事件；这里累积，
+    // 工作流结束统一回写一次 hitCount，避免 N 个并行 agent 各自写 rules.json 的竞态
+    const injectedRuleIds = new Set<string>();
+    const onRulesInjected = (d: { ruleIds?: string[] }) => d.ruleIds?.forEach(id => injectedRuleIds.add(id));
+    workflowEvents.on('rulesInjected', onRulesInjected);
     // 沙箱 v2：开启时为整个工作流起一个持久容器，命令经 docker exec 共享状态。
     // 起容器失败（Docker 不可用）安全失败，不回退宿主。
     if (isSandboxEnabled()) {
@@ -390,6 +402,10 @@ Return ONLY valid JSON.`;
     try {
       return await this.executeWorkflowInner(goal, options);
     } finally {
+      workflowEvents.off('rulesInjected', onRulesInjected);
+      if (injectedRuleIds.size > 0) {
+        try { new RuleStore().recordHits([...injectedRuleIds]); } catch { /* 命中统计失败不影响工作流 */ }
+      }
       await endSandboxSession();
       observers.dispose();
       endWorkflowAbortScope();

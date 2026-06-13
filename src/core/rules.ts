@@ -166,14 +166,30 @@ export class RuleStore {
    * 作用域查询（C.3）：通用规则始终返回，带域标签的规则需与任务描述匹配。
    * 返回结果按命中计数刷新。
    */
-  getRulesForTask(taskDescription: string): Rule[] {
+  /** 只读：选出与任务匹配的规则子集，不改 hitCount、不写盘（并行热路径安全） */
+  selectRulesForTask(taskDescription: string): Rule[] {
     const desc = taskDescription.toLowerCase();
     const matched = this.getActive().filter(r => {
       if (r.domains.length === 0) return true; // 通用规则
       return r.domains.some(d => desc.includes(d.toLowerCase()));
     });
+    return matched.slice(0, this.config.maxInjectedRules);
+  }
 
-    const selected = matched.slice(0, this.config.maxInjectedRules);
+  /** 批量记一次命中并一次性持久化（供工作流结束时统一回写，替代每任务一次写盘） */
+  recordHits(ruleIds: string[]): void {
+    if (ruleIds.length === 0) return;
+    const ids = new Set(ruleIds);
+    let changed = false;
+    for (const r of this.rules) {
+      if (ids.has(r.id)) { r.hitCount++; changed = true; }
+    }
+    if (changed) this.save();
+  }
+
+  /** @deprecated 会写盘，并行调用有竞态；agent 热路径请用 selectRulesForTask + 末尾 recordHits */
+  getRulesForTask(taskDescription: string): Rule[] {
+    const selected = this.selectRulesForTask(taskDescription);
     if (selected.length > 0) {
       for (const r of selected) r.hitCount++;
       this.save();
