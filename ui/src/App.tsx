@@ -42,6 +42,7 @@ function App() {
   const [workflowStatus, setWorkflowStatus] = useState<'idle' | 'running' | 'completed'>('idle');
   const [finalResult, setFinalResult] = useState('');
   const [tokensSpent, setTokensSpent] = useState<number | null>(null);
+  const [costUsd, setCostUsd] = useState<number | null>(null);
   const [diffText, setDiffText] = useState<string | null>(null);
   const [plugins, setPlugins] = useState<string[]>([]);
   const [memory, setMemory] = useState<string>('');
@@ -224,6 +225,11 @@ function App() {
         if (rec) defaults[q.id] = rec.label;
       }
       setClarifyChoices(defaults);
+    });
+
+    es.addEventListener('costReport', (e) => {
+      const data = JSON.parse(e.data);
+      if (data.estimatedCostUsd != null) setCostUsd(data.estimatedCostUsd);
     });
 
     es.addEventListener('workflowStopped', (e) => {
@@ -419,7 +425,7 @@ function App() {
               <h3 style={{ margin: 0, color: '#60a5fa' }}>🎉 Final Synthesized Output</h3>
               {tokensSpent !== null && (
                 <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '4px 12px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 600 }}>
-                  Tokens Consumed: {tokensSpent.toLocaleString()}
+                  Tokens Consumed: {tokensSpent.toLocaleString()}{costUsd != null ? ` · ~${costUsd.toFixed(2)}` : ''}
                 </span>
               )}
             </div>
