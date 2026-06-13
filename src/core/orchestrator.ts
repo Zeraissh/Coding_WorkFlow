@@ -15,6 +15,7 @@ import { gitCreateBranch, gitCommitAll } from '../tools/git_tool';
 import { ProjectIndexer } from './indexer';
 import { StateManager, WorkflowState } from './stateManager';
 import { beginWorkflowAbortScope, endWorkflowAbortScope, isWorkflowStopped } from './abort';
+import { isSandboxEnabled, beginSandboxSession, endSandboxSession } from './sandbox';
 import { Clarifier, ClarifyAnswer } from './orchestrator/clarifier';
 import { RuleStore } from './rules';
 import { KnowledgeStore } from './knowledge';
@@ -367,9 +368,15 @@ Return ONLY valid JSON.`;
    */
   async executeWorkflow(goal: string, options?: { resume?: boolean }): Promise<string> {
     beginWorkflowAbortScope();
+    // 沙箱 v2：开启时为整个工作流起一个持久容器，命令经 docker exec 共享状态。
+    // 起容器失败（Docker 不可用）安全失败，不回退宿主。
+    if (isSandboxEnabled()) {
+      await beginSandboxSession();
+    }
     try {
       return await this.executeWorkflowInner(goal, options);
     } finally {
+      await endSandboxSession();
       endWorkflowAbortScope();
     }
   }

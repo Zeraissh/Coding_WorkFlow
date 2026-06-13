@@ -143,3 +143,113 @@ export async function runInSandbox(
     });
   });
 }
+
+// ============================================================================
+// Sandbox v2 — 持久容器（一次工作流一个容器，命令经 docker exec 执行）
+// ============================================================================
+//
+// v1 每条命令一个 --rm 容器 = 无状态（cwd/env 不跨命令保留）。
+// v2 在工作流开始时起一个常驻容器（sleep infinity），命令用 docker exec 跑进去，
+// 工作流结束 docker rm -f 销毁 —— cwd/env/进程在命令之间保留，更贴近真实 shell。
+
+/** 构建"起一个常驻容器"的 docker 参数（纯函数，可测） */
+export function buildRunDaemonArgs(
+  config: ResolvedSandboxConfig,
+  cwd: string,
+  containerName: string
+): string[] {
+  return [
+    'run', '-d', '--name', containerName,
+    '-v', `${cwd}:/workspace`,
+    '-w', '/workspace',
+    '--network', config.network,
+    '--memory', config.memory,
+    '--cpus', config.cpus,
+    '--pids-limit', '512',
+    config.image,
+    'sleep', 'infinity',
+  ];
+}
+
+/** 构建"在常驻容器内执行命令"的 docker exec 参数（纯函数，可测） */
+export function buildExecArgs(containerName: string, command: string): string[] {
+  return ['exec', '-w', '/workspace', containerName, 'sh', '-c', command];
+}
+
+async function runDocker(args: string[], timeoutMs: number): Promise<SandboxResult> {
+  const { execFile } = await import('child_process');
+  return await new Promise<SandboxResult>((resolve, reject) => {
+    execFile('docker', args, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err && (err as any).killed) {
+        reject(new SandboxError(`Sandboxed command timed out after ${timeoutMs}ms`));
+        return;
+      }
+      resolve({ stdout: stdout || '', stderr: stderr || '' });
+    });
+  });
+}
+
+/**
+ * 一次工作流的持久沙箱容器。start → exec*… → stop。
+ * start 失败（Docker 不可用等）抛 SandboxError（安全失败，不回退宿主）。
+ */
+export class SandboxSession {
+  readonly containerName: string;
+  private started = false;
+
+  constructor(private cwd: string) {
+    this.containerName = `coding-workflow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  async start(): Promise<void> {
+    if (this.started) return;
+    if (!(await isDockerAvailable())) {
+      throw new SandboxError(
+        'Sandbox is enabled but Docker is not available. Install/start Docker, ' +
+        'or disable sandboxConfig.enabled to run commands on the host.'
+      );
+    }
+    const config = resolveSandboxConfig();
+    await runDocker(buildRunDaemonArgs(config, this.cwd, this.containerName), 120_000);
+    this.started = true;
+  }
+
+  async exec(command: string, timeoutMs: number = 600_000): Promise<SandboxResult> {
+    if (!this.started) throw new SandboxError('Sandbox session not started');
+    return runDocker(buildExecArgs(this.containerName, command), timeoutMs);
+  }
+
+  async stop(): Promise<void> {
+    if (!this.started) return;
+    this.started = false;
+    try {
+      await runDocker(['rm', '-f', this.containerName], 60_000);
+    } catch (e: any) {
+      console.warn(`[sandbox] Failed to remove container ${this.containerName}: ${e.message}`);
+    }
+  }
+}
+
+// --- 当前工作流的沙箱会话 scope（仿 abort.ts） ---
+let _currentSession: SandboxSession | null = null;
+
+/** 工作流开始时调用（沙箱开启时）：起容器并设为当前会话。失败则抛出。 */
+export async function beginSandboxSession(cwd: string = process.cwd()): Promise<SandboxSession> {
+  const session = new SandboxSession(cwd);
+  await session.start();
+  _currentSession = session;
+  return session;
+}
+
+/** 获取当前工作流的沙箱会话（无则 null） */
+export function getSandboxSession(): SandboxSession | null {
+  return _currentSession;
+}
+
+/** 工作流结束：销毁容器并清理会话 */
+export async function endSandboxSession(): Promise<void> {
+  if (_currentSession) {
+    await _currentSession.stop();
+    _currentSession = null;
+  }
+}

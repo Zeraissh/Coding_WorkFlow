@@ -7,7 +7,7 @@ import { fslock } from '../core/fslock';
 import { workflowEvents } from '../core/events';
 import { ProjectIndexer } from '../core/indexer';
 import { resolveWithinRoot, assertCommandAllowed } from '../core/security';
-import { isSandboxEnabled, runInSandbox } from '../core/sandbox';
+import { isSandboxEnabled, runInSandbox, getSandboxSession } from '../core/sandbox';
 import { KnowledgeStore } from '../core/knowledge';
 
 const execAsync = promisify(exec);
@@ -238,10 +238,16 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
     switch (name) {
       case 'run_terminal_command': {
         assertCommandAllowed(args.command);
-        // 沙箱开启时在 Docker 容器内执行（隔离宿主）；否则宿主执行
-        const exec = isSandboxEnabled()
-          ? await runInSandbox(args.command, process.cwd())
-          : await execAsync(args.command);
+        // 优先级：工作流内的持久沙箱会话（v2，保留状态）> 单命令沙箱（v1）> 宿主
+        const session = getSandboxSession();
+        let exec: { stdout: string; stderr: string };
+        if (session) {
+          exec = await session.exec(args.command);
+        } else if (isSandboxEnabled()) {
+          exec = await runInSandbox(args.command, process.cwd());
+        } else {
+          exec = await execAsync(args.command);
+        }
         return `STDOUT:\n${exec.stdout}\nSTDERR:\n${exec.stderr}`;
       }
       case 'read_file': {

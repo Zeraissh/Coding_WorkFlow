@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 沙箱 v2：持久容器（保留跨命令状态）
+
+### Added
+- **持久沙箱容器**（`SandboxSession` in `src/core/sandbox.ts`）：沙箱开启时，整个工作流共用**一个**常驻容器（`docker run -d … sleep infinity`），命令经 `docker exec` 跑进去，结束销毁——`cd`/环境变量/已装依赖在命令间保留，贴近真实 shell。会话生命周期绑定 `executeWorkflow`（仿 abort scope），失败安全失败（Docker 不可用即报错，不回退宿主）
+- v1 单命令容器退为兜底：工作流之外执行命令时仍走每命令一个 `--rm` 容器
+- 纯参数构建 `buildRunDaemonArgs`/`buildExecArgs`（可测）；命令仍作为单 arg 传 `sh -c`，杜绝注入；docs/sandbox.md 更新执行模式说明
+- 测试基线 → 240（守护容器/exec 参数、会话 scope、未起容器即 exec 报错）
+
 ## [Unreleased] — 知识库语义检索（词法兜底）
 
 ### Added
