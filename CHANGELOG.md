@@ -2,6 +2,12 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 效率：单任务跳过合成 LLM 调用
+
+### Changed
+- **单任务成功时跳过最终合成 LLM 调用**：`verifyAndSynthesize` 的合成步骤是把多个并行子任务结果"揉"成连贯交付物；只有一个成功任务时，合成单个结果只是重述 agent 输出——多花一次 LLM 往返。现在单任务成功直接用其产出，**验证（autoCheck/semanticReview）仍照常跑，质量不打折**；多任务或有失败仍走合成。`verifyAndSynthesize` 新增 `{ synthesize }` 选项
+- 测试基线 → 260（synthesize=false 不调 LLM 直接返回 agent 输出、默认仍合成、多结果跳过时拼接）
+
 ## [Unreleased] — 并发安全：工作流互斥 + 规则注入去竞态
 
 ### Fixed
