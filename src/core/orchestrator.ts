@@ -113,6 +113,8 @@ export class Orchestrator {
    */
   private async runClarifyPhase(goal: string): Promise<string> {
     const rawConfig = (GlobalConfig.get() as any).clarifyConfig || {};
+    // 效率优化：澄清阶段被禁用时直接返回，省去一次缺口评估的 LLM 调用
+    if (rawConfig.enabled === false) return '';
     const clarifier = new Clarifier(
       {
         callLLM: async (prompt, opts) => {

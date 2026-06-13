@@ -164,3 +164,29 @@ describe('Decomposer.decompose', () => {
     expect(b.sharedFiles).toContain('shared.ts');
   });
 });
+
+describe('Decomposer self-check efficiency', () => {
+  it('skips the self-check LLM call when there is only one subtask', async () => {
+    const { decomposer, callLLM } = makeDecomposer(
+      [asJsonBlock([{ id: 'solo', description: 'the only task' }])],
+      { enableSelfCheck: true }
+    );
+
+    const result = await decomposer.decompose('a simple goal');
+    expect(result.subtasks).toHaveLength(1);
+    expect(callLLM).toHaveBeenCalledTimes(1); // decompose only — no self-check call
+  });
+
+  it('still runs the self-check when there are multiple subtasks', async () => {
+    const selfCheck = '```json\n' + JSON.stringify({
+      missingDependencies: [], fileConflicts: [], overlyCoarse: [], overlyFine: [], warnings: [],
+    }) + '\n```';
+    const { decomposer, callLLM } = makeDecomposer(
+      [asJsonBlock([{ id: 'a', description: 'a' }, { id: 'b', description: 'b' }]), selfCheck],
+      { enableSelfCheck: true }
+    );
+
+    await decomposer.decompose('a goal with parts');
+    expect(callLLM).toHaveBeenCalledTimes(2); // decompose + self-check
+  });
+});

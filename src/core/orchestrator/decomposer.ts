@@ -116,7 +116,8 @@ export class Decomposer {
     }
 
     // Step 3: 自检（可选）
-    if (this.config.enableSelfCheck) {
+    // 效率优化：自检分析子任务间的依赖/文件冲突，≤1 个子任务时无可检之处 → 跳过这次 LLM 调用
+    if (this.config.enableSelfCheck && subtasks.length > 1) {
       const selfCheckResult = await this.selfCheck(subtasks);
       subtasks = this.applySelfCheck(subtasks, selfCheckResult);
       warnings.push(...selfCheckResult.warnings);

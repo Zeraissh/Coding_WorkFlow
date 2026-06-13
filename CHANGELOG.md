@@ -2,6 +2,13 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 效率：省去无谓的规划 LLM 调用
+
+### Changed
+- **跳过单任务自检**：decomposer 的自检阶段分析子任务间的依赖/文件冲突，≤1 个子任务时无可检之处——此时跳过这次 LLM 调用（简单/兜底任务每次省一次往返）
+- **澄清禁用即短路**：`clarifyConfig.enabled=false` 时直接返回，不再先调一次缺口评估再丢弃
+- 这两处都是确定性正确的优化（不改变任何多任务工作流的行为），直接降低简单任务的 token 成本与延迟；省下的成本现在能在运行 trace（见上一节）里看到
+
 ## [Unreleased] — 观测性：运行 trace + 成本估算
 
 ### Added
