@@ -2,6 +2,13 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 修复：DAG 失败传播
+
+### Fixed
+- **前置任务失败时后继照常硬跑**（correctness bug）：批次按拓扑顺序执行，但此前不检查某任务的依赖是否成功——前置失败了，依赖它的后继任务仍会拿着缺失的前提执行，产出错误结果。现在调度前按 taskId 查依赖成败，任一依赖未成功（失败或被跳过）则**跳过该任务并标记 skipped（带原因）**，失败沿 DAG 传递（被跳过任务记为 success=false，其后继也连带跳过）
+- 抽出纯函数 `failedDependencyOf(task, successByTask)` 便于单测（安全默认：依赖未知不跳过，只在确认失败时跳）
+- 测试基线 → 248（6 个传播逻辑测试）
+
 ## [Unreleased] — 修复：观测/归因下沉到引擎（之前主路径不采集）
 
 ### Fixed
