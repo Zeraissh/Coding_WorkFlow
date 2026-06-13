@@ -2,6 +2,13 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 观测性：运行 trace + 成本估算
+
+### Added
+- **结构化运行 trace**（`src/core/tracer.ts`）：订阅事件总线把每次工作流装配成可查询 JSON（workflow → 各 task 的状态/token/LLM 调用/改动文件/专注度 → 总 token/成本/耗时），原子写入 `.workflow/traces/<id>.json`。把黑盒变成可调试的记录
+- **成本估算**：`estimateCostUsd` 按模型单价（input/cached/output 分别计价）估算每次运行的美元成本；`llmUsageReport` 事件增补 `inputTokens`/`outputTokens`/`model` 字段（向后兼容）；新增 `costReport` 事件，Dashboard 最终输出区内联显示 `~$x.xx`
+- 测试基线 205 → 213（成本计价纯函数 + 事件驱动 trace 装配 8 个测试）
+
 ## [Unreleased] — 可选 Docker 沙箱（隔离 shell 执行）
 
 ### Added

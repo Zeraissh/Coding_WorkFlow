@@ -92,7 +92,8 @@ function reportTokenUsage(
   cachedTokens: number,
   agentId?: string,
   taskId?: string,
-  provider?: string
+  provider?: string,
+  model?: string
 ): void {
   const totalTokens = inputTokens + outputTokens;
 
@@ -111,10 +112,13 @@ function reportTokenUsage(
       taskId,
       agentId,
       tokens: totalTokens,
+      inputTokens,
+      outputTokens,
       cachedTokens,
       calls: 1,
       cacheHitRate: inputTokens > 0 ? Math.round((cachedTokens / inputTokens) * 100) : 0,
       provider: provider || 'unknown',
+      model: model || 'unknown',
     });
   }
 }
@@ -507,7 +511,7 @@ async function askOpenAI(
   const inputTokens = response.usage?.prompt_tokens || 0;
   const outputTokens = response.usage?.completion_tokens || 0;
   const cachedTokens = (response.usage as any)?.prompt_tokens_details?.cached_tokens || 0;
-  reportTokenUsage(inputTokens, outputTokens, cachedTokens, agentId, taskId, config.provider);
+  reportTokenUsage(inputTokens, outputTokens, cachedTokens, agentId, taskId, config.provider, config.model);
 
   return {
     id: response.id,
@@ -610,7 +614,7 @@ async function askAnthropic(
   const inputTokens = response.usage?.input_tokens || 0;
   const outputTokens = response.usage?.output_tokens || 0;
   const cachedTokens = (response.usage as any)?.cache_read_input_tokens || 0;
-  reportTokenUsage(inputTokens, outputTokens, cachedTokens, agentId, taskId, config.provider);
+  reportTokenUsage(inputTokens, outputTokens, cachedTokens, agentId, taskId, config.provider, config.model);
 
   return response;
 }
