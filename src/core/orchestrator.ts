@@ -561,7 +561,9 @@ Return ONLY valid JSON.`;
 
     workflowEvents.emit('log', { taskId: 'orchestrator', message: 'Verifying and Synthesizing...' });
     const verifier = new Verifier();
-    const finalOutput = await verifier.verifyAndSynthesize(plan, results, agentLogs);
+    // 单任务成功 → 跳过合成 LLM 调用（验证仍跑），省一次往返；多任务/有失败仍合成
+    const singleTaskSuccess = results.length === 1 && results[0]!.success;
+    const finalOutput = await verifier.verifyAndSynthesize(plan, results, agentLogs, { synthesize: !singleTaskSuccess });
 
     // Memory Extraction Phase
     extractLessons(goal, agentLogs).catch(console.error);

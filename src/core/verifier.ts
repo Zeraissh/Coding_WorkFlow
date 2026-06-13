@@ -53,7 +53,8 @@ export class Verifier {
   async verifyAndSynthesize(
     plan: Plan,
     results: TaskResult[],
-    agentLogs?: AgentExecutionLog[]
+    agentLogs?: AgentExecutionLog[],
+    opts?: { synthesize?: boolean }
   ): Promise<string> {
     const startTime = Date.now();
 
@@ -116,20 +117,27 @@ Please provide a final, coherent answer or output that achieves the original goa
 If any sub-tasks failed, attempt to work around the failure or mention what is missing.
 If the automatic checks or semantic review found issues, mention them in your synthesis.`;
 
-    const response = await askLLM(systemPrompt, [{ role: 'user', content: 'Please synthesize the results.' }]);
-
-    const contentText = response.content.find(block => block.type === 'text');
-    if (!contentText || contentText.type !== 'text') {
-      throw new Error("Failed to get text response from LLM");
+    // 效率：单任务成功时跳过合成 LLM 调用——合成单个结果只是重述 agent 输出，
+    // 直接用其产出（验证 autoCheck/semantic 仍照常跑，质量不打折）
+    let synthesizedText: string;
+    if (opts?.synthesize === false) {
+      synthesizedText = results.map(r => r.result).filter(Boolean).join('\n\n') || '(no output)';
+    } else {
+      const response = await askLLM(systemPrompt, [{ role: 'user', content: 'Please synthesize the results.' }]);
+      const contentText = response.content.find(block => block.type === 'text');
+      if (!contentText || contentText.type !== 'text') {
+        throw new Error("Failed to get text response from LLM");
+      }
+      synthesizedText = contentText.text;
     }
 
     // 附加验证报告（如果执行了验证）
     const duration = Date.now() - startTime;
     if (autoCheckResult) {
       const summary = generateSummary(autoCheckResult, semanticIssues, duration);
-      return `${contentText.text}\n\n---\n${summary}`;
+      return `${synthesizedText}\n\n---\n${summary}`;
     }
 
-    return contentText.text;
+    return synthesizedText;
   }
 }

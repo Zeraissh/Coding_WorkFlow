@@ -74,3 +74,33 @@ describe('Verifier.verifyAndSynthesize — synthesis path with mock LLM', () => 
     expect(out).toContain('synthesis noting the partial failure');
   });
 });
+
+describe('Verifier — single-task fast path (skip synthesis LLM)', () => {
+  it('returns the task output directly without calling the synthesis LLM when synthesize=false', async () => {
+    mockAskLLM.mockResolvedValue(textReply('should not be used'));
+    const single: any = [{ taskId: 't1', result: 'the agent already produced this', success: true }];
+
+    const out = await new Verifier().verifyAndSynthesize(plan, single, [], { synthesize: false });
+
+    expect(out).toContain('the agent already produced this');
+    expect(out).not.toContain('should not be used');
+    expect(mockAskLLM).not.toHaveBeenCalled(); // no synthesis round-trip
+  });
+
+  it('still synthesizes (calls the LLM) by default', async () => {
+    mockAskLLM.mockResolvedValue(textReply('synthesized'));
+    await new Verifier().verifyAndSynthesize(plan, results, []);
+    expect(mockAskLLM).toHaveBeenCalledTimes(1);
+  });
+
+  it('joins multiple results when synthesis is skipped', async () => {
+    mockAskLLM.mockResolvedValue(textReply('unused'));
+    const two: any = [
+      { taskId: 't1', result: 'part one', success: true },
+      { taskId: 't2', result: 'part two', success: true },
+    ];
+    const out = await new Verifier().verifyAndSynthesize(plan, two, [], { synthesize: false });
+    expect(out).toContain('part one');
+    expect(out).toContain('part two');
+  });
+});
