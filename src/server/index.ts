@@ -8,6 +8,7 @@ import { GlobalConfig } from '../core/config';
 import { PluginManager } from '../core/pluginManager';
 import { getProjectMemory } from '../core/memory';
 import { stopWorkflow } from '../core/abort';
+import { getGovernanceSnapshot, applyGovernanceAction } from '../core/governance';
 
 import { fileURLToPath } from 'url';
 
@@ -194,6 +195,37 @@ app.post('/api/approve', (req, res) => {
   
   pendingApprovals.delete(reqId);
   res.json({ status: 'resolved' });
+});
+
+// --- Governance (skill/rule HITL) ---
+// 进化闭环的人工提议实时推给 Dashboard，让用户知道有东西待审批
+workflowEvents.on('skillDraftProposed', (data) => broadcastSSE('skillDraftProposed', data));
+workflowEvents.on('skillRetired', (data) => broadcastSSE('skillRetired', data));
+workflowEvents.on('ruleRetirementProposed', (data) => broadcastSSE('ruleRetirementProposed', data));
+
+app.get('/api/governance', (_req, res) => {
+  try {
+    res.json(getGovernanceSnapshot());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/governance/:kind/:action/:id', (req, res) => {
+  const { kind, action, id } = req.params;
+  const map: Record<string, 'skill.activate' | 'skill.retire' | 'rule.archive' | 'rule.revive'> = {
+    'skill:activate': 'skill.activate',
+    'skill:retire': 'skill.retire',
+    'rule:archive': 'rule.archive',
+    'rule:revive': 'rule.revive',
+  };
+  const resolved = map[`${kind}:${action}`];
+  if (!resolved) {
+    return res.status(400).json({ error: `Unknown governance action: ${kind}/${action}` });
+  }
+  const ok = applyGovernanceAction({ kind: resolved, id } as any);
+  if (!ok) return res.status(404).json({ error: 'Target not found' });
+  res.json({ ok: true, snapshot: getGovernanceSnapshot() });
 });
 
 export function startServer(port: number = 3000) {

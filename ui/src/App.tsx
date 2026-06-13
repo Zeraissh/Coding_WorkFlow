@@ -45,6 +45,17 @@ function App() {
   const [diffText, setDiffText] = useState<string | null>(null);
   const [plugins, setPlugins] = useState<string[]>([]);
   const [memory, setMemory] = useState<string>('');
+  const [governance, setGovernance] = useState<{ skills: any[]; rules: any[] }>({ skills: [], rules: [] });
+  useEffect(() => {
+    const load = () => fetch(`${API_BASE}/governance`).then(r => r.json()).then(setGovernance).catch(() => {});
+    load();
+    const es = new EventSource(`${API_BASE}/stream`);
+    ['skillDraftProposed', 'skillRetired', 'ruleRetirementProposed'].forEach(ev => es.addEventListener(ev, load));
+    return () => es.close();
+  }, []);
+  const govAction = (kind: string, action: string, id: string) =>
+    fetch(`${API_BASE}/governance/${kind}/${action}/${id}`, { method: 'POST' })
+      .then(r => r.json()).then(d => { if (d.snapshot) setGovernance(d.snapshot); }).catch(() => {});
   const [connection, setConnection] = useState<'connected' | 'reconnecting'>('reconnecting');
   const [clarify, setClarify] = useState<ClarifyRequest | null>(null);
   const [clarifyChoices, setClarifyChoices] = useState<Record<string, string>>({});
@@ -309,6 +320,29 @@ function App() {
 
       <div className="main-layout" style={{ display: 'flex', gap: '2rem', padding: '0 2rem' }}>
         <div className="sidebar" style={{ flex: '0 0 300px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {(governance.skills.length > 0 || governance.rules.length > 0) && (
+            <div className="governance-panel" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'var(--panel-bg, #1e1e2e)', borderRadius: '8px', border: '1px solid var(--border-color, #333)' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem' }}>🧬 Governance</h3>
+              {governance.skills.map((sk: any) => (
+                <div key={sk.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', padding: '2px 0' }}>
+                  <span title={sk.description}><b>{sk.name}</b> <em style={{ opacity: 0.6 }}>[{sk.status}{sk.winRate != null ? ` ${sk.winRate}%` : ''}]</em></span>
+                  <span>
+                    {sk.status !== 'active' && <button onClick={() => govAction('skill', 'activate', sk.id)} style={{ fontSize: '0.7rem' }}>activate</button>}
+                    {sk.status === 'active' && <button onClick={() => govAction('skill', 'retire', sk.id)} style={{ fontSize: '0.7rem' }}>retire</button>}
+                  </span>
+                </div>
+              ))}
+              {governance.rules.filter((r: any) => r.status === 'pending_retirement').map((r: any) => (
+                <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', padding: '2px 0' }}>
+                  <span title={r.text} style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠ {r.text}</span>
+                  <span>
+                    <button onClick={() => govAction('rule', 'revive', r.id)} style={{ fontSize: '0.7rem' }}>keep</button>
+                    <button onClick={() => govAction('rule', 'archive', r.id)} style={{ fontSize: '0.7rem' }}>archive</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="panel">
             <h3 style={{ margin: '0 0 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>🔌 Active Plugins</h3>
             {plugins.length === 0 ? <p style={{ color: 'var(--text-secondary)' }}>No plugins loaded</p> : (

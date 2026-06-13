@@ -204,6 +204,15 @@ export class SkillRegistry {
     return true;
   }
 
+  /** HITL：手动退役一个 skill（保留历史胜负计数） */
+  retireSkill(id: string): boolean {
+    const skill = this.loadSkill(id);
+    if (!skill) return false;
+    skill.status = 'retired';
+    this.saveSkill(skill);
+    return true;
+  }
+
   // ==========================================================================
   // 自动起草
   // ==========================================================================
