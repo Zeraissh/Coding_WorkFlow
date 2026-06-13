@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 可选 Docker 沙箱（隔离 shell 执行）
+
+### Added
+- **Docker 沙箱**（`src/core/sandbox.ts`）：默认关闭，开启后 `run_terminal_command` 在一次性 Docker 容器内执行（`docker run --rm -v <项目>:/workspace`），命令无法访问宿主进程/项目外文件、资源受限（memory/cpus/pids）、用完即焚；项目目录经 bind mount 共享所以代码改动持久化。替代此前"命令黑名单+路径牢笼"这一尽力而为的防线，提供真正的进程/文件系统隔离
+- **安全失败**：开启沙箱但 Docker 不可用时命令直接报错，绝不悄悄回退宿主执行
+- 新配置 `sandboxConfig`（enabled/image/network/memory/cpus，见 [docs/sandbox.md](docs/sandbox.md)）；命令黑名单在沙箱模式下仍生效（纵深防御）
+- 测试基线 200 → 205（buildDockerArgs 参数构建、配置解析、注入防护——确定性纯逻辑；容器执行属集成测试，在 WSL 手测）
+
 ## [Unreleased] — 治理界面（进化闭环人工环节 UI 化）
 
 ### Added

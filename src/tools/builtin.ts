@@ -7,6 +7,7 @@ import { fslock } from '../core/fslock';
 import { workflowEvents } from '../core/events';
 import { ProjectIndexer } from '../core/indexer';
 import { resolveWithinRoot, assertCommandAllowed } from '../core/security';
+import { isSandboxEnabled, runInSandbox } from '../core/sandbox';
 import { KnowledgeStore } from '../core/knowledge';
 
 const execAsync = promisify(exec);
@@ -14,7 +15,7 @@ const execAsync = promisify(exec);
 export const builtinTools = [
   {
     name: 'run_terminal_command',
-    description: 'Execute a bash or powershell command on the local machine.',
+    description: 'Execute a shell command. Runs on the host by default, or inside an isolated Docker container when sandbox mode is enabled (commands then run in a Linux container regardless of host OS).',
     input_schema: {
       type: 'object',
       properties: {
@@ -235,10 +236,14 @@ function countOccurrences(content: string, search: string): number {
 export async function executeBuiltinTool(name: string, args: any, agentId?: string): Promise<string> {
   try {
     switch (name) {
-      case 'run_terminal_command':
+      case 'run_terminal_command': {
         assertCommandAllowed(args.command);
-        const { stdout, stderr } = await execAsync(args.command);
-        return `STDOUT:\n${stdout}\nSTDERR:\n${stderr}`;
+        // 沙箱开启时在 Docker 容器内执行（隔离宿主）；否则宿主执行
+        const exec = isSandboxEnabled()
+          ? await runInSandbox(args.command, process.cwd())
+          : await execAsync(args.command);
+        return `STDOUT:\n${exec.stdout}\nSTDERR:\n${exec.stderr}`;
+      }
       case 'read_file': {
         const safePath = resolveWithinRoot(args.path);
         if (agentId) await fslock().acquireRead(safePath, agentId);
