@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { workflowEvents } from './events';
+import { embedText } from './embedder';
 
 export interface CodeChunk {
   file: string;
@@ -10,7 +11,6 @@ export interface CodeChunk {
 
 export class ProjectIndexer {
   private index: any = null;
-  private extractFeatures: any = null;
   private chunksMap: Map<number, CodeChunk> = new Map();
   private numElements = 0;
   private indexPath: string;
@@ -33,27 +33,21 @@ export class ProjectIndexer {
     if (this.initialized || this.disabled) return;
 
     try {
-      // 动态导入以避免原生模块急切加载导致的崩溃
-      const transformers = await import('@xenova/transformers');
-      const hnswlib = (await import('hnswlib-node')).default;
-
-      // 国内/受限网络支持：HF_ENDPOINT=https://hf-mirror.com 切换模型下载源
-      if (process.env.HF_ENDPOINT) {
-        (transformers.env as any).remoteHost = process.env.HF_ENDPOINT;
+      // 嵌入走共享 embedder（与知识库共用同一份模型加载，全进程一次）；
+      // 探测可用性：embedText 不可用（离线/受限网络）时返回 null → 降级无 RAG
+      const probe = await embedText('probe');
+      if (!probe) {
+        this.disabled = true; // embedText 已自行 warn，这里不重复
+        return;
       }
-
+      const hnswlib = (await import('hnswlib-node')).default;
       this.index = new hnswlib.HierarchicalNSW('cosine', this.dim);
-      this.extractFeatures = await transformers.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     } catch (e: any) {
-      // 嵌入模型加载失败（典型原因：huggingface.co 不可达）→ 降级为无 RAG 模式，绝不让工作流崩溃
+      // 原生索引模块不可用 → 降级为无 RAG 模式，绝不让工作流崩溃
       this.disabled = true;
       if (!ProjectIndexer.warnedOnce) {
         ProjectIndexer.warnedOnce = true;
-        console.warn(
-          `[indexer] Embedding model unavailable (${(e.message || '').slice(0, 80)}). ` +
-          `Semantic RAG disabled for this run. ` +
-          `Tip: if huggingface.co is blocked, set HF_ENDPOINT=https://hf-mirror.com`
-        );
+        console.warn(`[indexer] Local RAG index unavailable (${(e.message || '').slice(0, 80)}). Semantic code search disabled.`);
       }
       return;
     }
@@ -77,8 +71,9 @@ export class ProjectIndexer {
   }
 
   async getEmbedding(text: string): Promise<number[]> {
-    const out = await this.extractFeatures(text, { pooling: 'mean', normalize: true });
-    return Array.from(out.data);
+    const v = await embedText(text);
+    if (!v) throw new Error('Embedding unavailable');
+    return v;
   }
 
   async scanAndIndex() {
