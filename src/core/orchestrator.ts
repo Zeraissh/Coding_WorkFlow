@@ -55,6 +55,17 @@ async function asyncPool<T>(poolLimit: number, array: any[], iteratorFn: (item: 
 }
 
 /**
+ * DAG 失败传播：返回该任务中"未成功"的第一个依赖 id（失败或被跳过），无则 undefined。
+ * 依赖不在已知结果里（理论上不应发生）视为未确认失败 → 不跳过（安全默认）。
+ */
+export function failedDependencyOf(
+  task: { dependencies?: string[] },
+  successByTask: Map<string, boolean>
+): string | undefined {
+  return task.dependencies?.find(d => successByTask.get(d) === false);
+}
+
+/**
  * The core orchestration engine that handles dynamic goal decomposition,
  * sub-agent dispatching, concurrency control, and continuous verification.
  */
@@ -472,7 +483,24 @@ Return ONLY valid JSON.`;
       const batchAgents: SubAgent[] = [];
 
       const poolSize = GlobalConfig.get().agentConfig?.parallelPoolSize ?? 5;
+      // DAG 失败传播：前置任务在更早批次已跑完，按 taskId 查其成败
+      const successByTask = new Map(results.map(r => [r.taskId, r.success]));
       const batchResults = await asyncPool(poolSize, batch!, async (task) => {
+        // 若任一依赖未成功（失败或被跳过），跳过本任务——不拿缺失前提硬跑
+        const failedDep = failedDependencyOf(task as any, successByTask);
+        if (failedDep) {
+          const skipped: TaskResult = {
+            taskId: task.id,
+            result: '',
+            success: false,
+            error: `Skipped: prerequisite task "${failedDep}" did not succeed`,
+            agentId: '',
+          };
+          workflowEvents.emit('log', { taskId: task.id, message: `⏭ Skipped — dependency "${failedDep}" failed` });
+          workflowEvents.emit('taskCompleted', { taskId: task.id, result: '', success: false, agentId: '' });
+          return skipped;
+        }
+
         workflowEvents.emit('log', { taskId: task.id, message: `Retrieving tools...` });
         const tools = await retriever.getRelevantTools(task.description);
         workflowEvents.emit('taskStarted', { taskId: task.id, description: task.description });
@@ -482,9 +510,9 @@ Return ONLY valid JSON.`;
 
         const result = await agent.execute(task, plan.goal, tools);
         agentLogs.push(agent.getExecutionLog());
-        workflowEvents.emit('taskCompleted', { 
-          taskId: task.id, 
-          result: result.result, 
+        workflowEvents.emit('taskCompleted', {
+          taskId: task.id,
+          result: result.result,
           success: result.success,
           agentId: result.agentId,
           executionLog: result.executionLog
