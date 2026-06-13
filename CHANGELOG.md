@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 架构：共享嵌入模型（消除双份加载）
+
+### Changed
+- **ProjectIndexer 复用共享 embedder**：此前代码 RAG（indexer.ts）和知识库（embedder.ts）各自 `pipeline('feature-extraction', MiniLM)` 加载一份 ~90MB 模型——同一进程内**两次模型加载**。现在 indexer 也走 `embedText`，全进程只加载一份，并自动继承共享 embedder 的离线降级（不可用时 RAG 无声降级，不再各自处理）
+- 移除 indexer 内重复的 transformers/pipeline 加载与降级逻辑
+- 测试基线 → 250（indexer 在嵌入不可用时优雅降级、不加载原生模型、search 返回 []）
+- 注：散落的 `new RuleStore()`/`new SkillRegistry()` 等是廉价小文件读，其并发写问题归到下一项（D 单例并发）一起处理
+
 ## [Unreleased] — 修复：DAG 失败传播
 
 ### Fixed
