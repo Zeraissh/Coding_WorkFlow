@@ -57,7 +57,7 @@ export function createMcpServer(cwd: string = process.cwd()): McpServer {
       },
     },
     async ({ query, topK }) => {
-      const hits = new KnowledgeStore(cwd).search(query, topK ?? 3);
+      const hits = await new KnowledgeStore(cwd).semanticSearch(query, topK ?? 3);
       const text = hits.length === 0
         ? 'No matching knowledge found.'
         : hits.map(h => `### ${h.docTitle} (score ${h.score.toFixed(2)})\n${h.chunk}`).join('\n\n');

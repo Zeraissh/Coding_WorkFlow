@@ -11,6 +11,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import { embedText, cosineSimilarity } from './embedder';
 
 export interface KnowledgeDoc {
   slug: string;
@@ -116,44 +118,97 @@ export class KnowledgeStore {
       .map(d => d.meta);
   }
 
-  /** 词法检索：文档分块后按查询词项重叠评分，返回 top-K 块 */
-  search(query: string, topK: number = 3): KnowledgeHit[] {
-    const queryTokens = new Set(tokenize(query));
-    if (queryTokens.size === 0 || !fs.existsSync(this.dir)) return [];
-
-    const hits: KnowledgeHit[] = [];
+  /** 把所有文档切成 {docTitle, slug, chunk} 列表（语义/词法检索共用） */
+  private chunksOf(): { docTitle: string; slug: string; chunk: string }[] {
+    if (!fs.existsSync(this.dir)) return [];
+    const out: { docTitle: string; slug: string; chunk: string }[] = [];
     for (const meta of this.listDocuments()) {
       const doc = this.readDoc(meta.slug);
       if (!doc) continue;
-
       const lines = doc.body.split('\n');
       for (let i = 0; i < lines.length; i += CHUNK_LINES) {
         const chunk = lines.slice(i, i + CHUNK_LINES).join('\n').trim();
-        if (!chunk) continue;
-
-        const chunkTokens = tokenize(chunk);
-        if (chunkTokens.length === 0) continue;
-        let overlap = 0;
-        const seen = new Set<string>();
-        for (const t of chunkTokens) {
-          if (queryTokens.has(t) && !seen.has(t)) {
-            overlap++;
-            seen.add(t);
-          }
-        }
-        if (overlap === 0) continue;
-
-        // 标题命中加权
-        const titleBonus = tokenize(meta.title).some(t => queryTokens.has(t)) ? 0.5 : 0;
-        hits.push({
-          docTitle: meta.title,
-          slug: meta.slug,
-          chunk,
-          score: overlap / queryTokens.size + titleBonus,
-        });
+        if (chunk) out.push({ docTitle: meta.title, slug: meta.slug, chunk });
       }
     }
+    return out;
+  }
 
+  /** 词法检索：文档分块后按查询词项重叠评分，返回 top-K 块 */
+  search(query: string, topK: number = 3): KnowledgeHit[] {
+    const queryTokens = new Set(tokenize(query));
+    if (queryTokens.size === 0) return [];
+
+    const hits: KnowledgeHit[] = [];
+    for (const { docTitle, slug, chunk } of this.chunksOf()) {
+      const chunkTokens = tokenize(chunk);
+      if (chunkTokens.length === 0) continue;
+      const seen = new Set<string>();
+      let overlap = 0;
+      for (const t of chunkTokens) {
+        if (queryTokens.has(t) && !seen.has(t)) { overlap++; seen.add(t); }
+      }
+      if (overlap === 0) continue;
+      const titleBonus = tokenize(docTitle).some(t => queryTokens.has(t)) ? 0.5 : 0;
+      hits.push({ docTitle, slug, chunk, score: overlap / queryTokens.size + titleBonus });
+    }
+    return hits.sort((a, b) => b.score - a.score).slice(0, topK);
+  }
+
+  private embCachePath(): string {
+    return path.join(this.dir, '.embeddings.json');
+  }
+
+  private loadEmbCache(): Record<string, number[]> {
+    try {
+      return JSON.parse(fs.readFileSync(this.embCachePath(), 'utf-8'));
+    } catch {
+      return {};
+    }
+  }
+
+  private saveEmbCache(cache: Record<string, number[]>): void {
+    try {
+      const tmp = `${this.embCachePath()}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(cache), 'utf-8');
+      fs.renameSync(tmp, this.embCachePath());
+    } catch { /* 缓存写失败不影响检索 */ }
+  }
+
+  /**
+   * 语义检索：嵌入查询与各分块做余弦排序；嵌入不可用（离线）时回退词法检索。
+   * 分块嵌入缓存在 .workflow/knowledge/.embeddings.json，避免重复计算。
+   * @param embed 可注入的嵌入函数（测试用），默认共享 embedder
+   */
+  async semanticSearch(
+    query: string,
+    topK: number = 3,
+    embed: (text: string) => Promise<number[] | null> = embedText
+  ): Promise<KnowledgeHit[]> {
+    const chunks = this.chunksOf();
+    if (chunks.length === 0) return [];
+
+    const qVec = await embed(query);
+    if (!qVec) return this.search(query, topK); // 嵌入不可用 → 词法兜底
+
+    const cache = this.loadEmbCache();
+    let cacheDirty = false;
+    const hits: KnowledgeHit[] = [];
+
+    for (const { docTitle, slug, chunk } of chunks) {
+      const key = crypto.createHash('sha1').update(chunk).digest('hex');
+      let vec = cache[key];
+      if (!vec) {
+        const computed = await embed(chunk);
+        if (!computed) return this.search(query, topK); // 中途降级 → 词法兜底
+        vec = computed;
+        cache[key] = vec;
+        cacheDirty = true;
+      }
+      hits.push({ docTitle, slug, chunk, score: cosineSimilarity(qVec, vec) });
+    }
+
+    if (cacheDirty) this.saveEmbCache(cache);
     return hits.sort((a, b) => b.score - a.score).slice(0, topK);
   }
 }

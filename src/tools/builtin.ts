@@ -313,7 +313,7 @@ export async function executeBuiltinTool(name: string, args: any, agentId?: stri
       }
       case 'query_knowledge': {
         const store = new KnowledgeStore();
-        const hits = store.search(args.query, args.topK || 3);
+        const hits = await store.semanticSearch(args.query, args.topK || 3);
         if (hits.length === 0) {
           return 'No matching knowledge found. The knowledge base may not cover this topic — consider asking the user or stating an explicit assumption.';
         }

@@ -72,3 +72,50 @@ describe('KnowledgeStore — search', () => {
     expect(empty.search('anything')).toHaveLength(0);
   });
 });
+
+describe('KnowledgeStore — semantic search', () => {
+  // deterministic fake embedding: 2 dims = [cat-ness, car-ness]
+  const fakeEmbed = async (text: string): Promise<number[]> => {
+    const t = text.toLowerCase();
+    return [
+      /cat|feline|kitten|pet/.test(t) ? 1 : 0,
+      /car|engine|vehicle|wheel/.test(t) ? 1 : 0,
+    ];
+  };
+
+  beforeEach(() => {
+    store.addDocument('Feline facts', 'Cats are feline pets. A kitten is a young cat.');
+    store.addDocument('Auto facts', 'Cars have engines and wheels. A vehicle moves.');
+  });
+
+  it('ranks the semantically closest chunk first', async () => {
+    const hits = await store.semanticSearch('information about a feline companion', 1, fakeEmbed);
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.docTitle).toBe('Feline facts');
+  });
+
+  it('falls back to lexical search when embeddings are unavailable', async () => {
+    const nullEmbed = async () => null;
+    const hits = await store.semanticSearch('engines and wheels', 3, nullEmbed);
+    // lexical match should still find the auto doc
+    expect(hits.some(h => h.docTitle === 'Auto facts')).toBe(true);
+  });
+
+  it('caches chunk embeddings so repeated searches do not re-embed chunks', async () => {
+    let calls = 0;
+    const countingEmbed = async (text: string) => { calls++; return fakeEmbed(text); };
+
+    await store.semanticSearch('feline', 3, countingEmbed);
+    const afterFirst = calls; // query + N chunks
+    await store.semanticSearch('feline', 3, countingEmbed);
+    const secondRoundCalls = calls - afterFirst;
+
+    expect(fs.existsSync(path.join(tmpDir, '.workflow', 'knowledge', '.embeddings.json'))).toBe(true);
+    expect(secondRoundCalls).toBe(1); // only the query is embedded; chunks come from cache
+  });
+
+  it('returns empty for an empty knowledge base', async () => {
+    const empty = new KnowledgeStore(fs.mkdtempSync(path.join(os.tmpdir(), 'kb-sem-empty-')));
+    expect(await empty.semanticSearch('anything', 3, fakeEmbed)).toHaveLength(0);
+  });
+});
