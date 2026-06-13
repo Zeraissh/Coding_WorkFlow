@@ -2,6 +2,13 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 测试深度：AutoChecker + SnapshotManager
+
+### Added
+- **AutoChecker 测试**（`tests/autoChecker.test.ts`，6）：790 行的规则式验证引擎此前零覆盖。借其可注入的 runShell/readFile/fileExists 依赖，用真实格式测了文件冲突检测、无工具链时干净通过、eslint JSON 解析、tsc 两种错误格式解析
+- **SnapshotManager 测试**（`tests/snapshotManager.test.ts`，4）：快照创建、回滚（恢复改动/删除/移除新增文件）、prune、空快照 no-op
+- 继续把"核心引擎测试 4/10"往上推
+
 ## [Unreleased] — 效率：省去无谓的规划 LLM 调用
 
 ### Changed
