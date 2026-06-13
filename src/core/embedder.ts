@@ -16,6 +16,9 @@ let _warned = false;
  */
 export async function embedText(text: string): Promise<number[] | null> {
   if (_disabled) return null;
+  // 测试环境/显式关闭：不加载原生嵌入模型（避免 transformers→sharp 在受限 CI 上崩溃）。
+  // 测试需要语义行为时注入 fake embed，不依赖真模型。
+  if (process.env.VITEST || process.env.WORKFLOW_NO_EMBEDDINGS === '1') return null;
   try {
     if (!_pipeline) {
       const transformers = await import('@xenova/transformers');
