@@ -57,6 +57,19 @@ export interface FocusModuleConfig {
   idleCallThreshold: number;
 }
 
+export interface SandboxModuleConfig {
+  /** 启用后 run_terminal_command 在 Docker 容器内执行（隔离宿主） */
+  enabled: boolean;
+  /** 容器镜像；应选含项目所需工具链的镜像，如 node:22 / python:3.12 */
+  image: string;
+  /** 容器网络：'bridge'（允许联网，装依赖用）| 'none'（断网，最强隔离） */
+  network: string;
+  /** 内存上限，如 '2g' */
+  memory: string;
+  /** CPU 上限，如 '2' */
+  cpus: string;
+}
+
 export interface WorkflowConfig {
   requireApproval: boolean;
   provider: 'anthropic' | 'deepseek' | 'openai';
@@ -71,6 +84,8 @@ export interface WorkflowConfig {
   clarifyConfig?: Partial<ClarifierModuleConfig>;
   /** 专注度监控配置 */
   focusConfig?: Partial<FocusModuleConfig>;
+  /** Docker 沙箱配置（隔离 shell 执行） */
+  sandboxConfig?: Partial<SandboxModuleConfig>;
   /** Verifier 两阶段校验配置 */
   verifierConfig?: Partial<VerifierModuleConfig>;
   /** 文件锁配置 */
@@ -108,6 +123,13 @@ const defaultConfig: WorkflowConfig = {
     enabled: true,
     repeatThreshold: 3,
     idleCallThreshold: 12,
+  },
+  sandboxConfig: {
+    enabled: false,
+    image: 'ubuntu:24.04',
+    network: 'bridge',
+    memory: '2g',
+    cpus: '2',
   },
   verifierConfig: {
     autoCheck: true,
