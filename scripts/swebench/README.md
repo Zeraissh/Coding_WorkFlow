@@ -63,6 +63,8 @@ python3 run_predictions.py --limit 30
 
 ## 4. 官方评测出分（需要 Docker，30 题约 1–2 小时 + 30GB 磁盘）
 
+直接用官方命令：
+
 ```bash
 python -m swebench.harness.run_evaluation \
   --dataset_name princeton-nlp/SWE-bench_Lite \
@@ -71,8 +73,25 @@ python -m swebench.harness.run_evaluation \
   --run_id coding-workflow-v1
 ```
 
-输出的 `coding-workflow-v1.*.json` 报告里 `resolved_instances / total_instances` 就是分数。
-参考线：早期 SWE-agent 在 Lite 上约 18%，当前开源 SOTA 50%+。第一次跑出可复现的数字最重要。
+**受限网络（国内）推荐用 `eval_wrapper.py`**：它在评测前注入与 `run_predictions.py` 相同的网络自适应（IPv4 优先 + HF 镜像探测），并给 harness 裸用的 `requests` 加全局重试——否则评测中途一次断网瞬间的 SSL EOF 会带崩整个评测：
+
+```bash
+python3 eval_wrapper.py
+```
+
+崩了也不怕：harness 有缓存，重跑会自动跳过已完成的题，只重评失败的。
+
+输出的 `coding-workflow.coding-workflow-v1.json` 报告里 `resolved_instances` 就是解决数。
+参考线：早期 SWE-agent 在 Lite 上约 18%，当前开源 SOTA 50%+。本仓库实测 30 题子集：17/31 = 54.8%（见 `results-lite-30.json`）。第一次跑出可复现的数字最重要。
+
+## Docker 安装（WSL2 Ubuntu，systemd）
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+# 关掉重开 WSL 终端让 docker 组生效
+docker run hello-world
+```
 
 ## 5. 全量 300 题（确认子集表现后再上，约 $50–150）
 

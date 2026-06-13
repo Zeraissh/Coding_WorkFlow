@@ -1,12 +1,18 @@
 # Coding Workflow (`autocode`)
 
 [![CI](https://github.com/Zeraissh/Coding_WorkFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Zeraissh/Coding_WorkFlow/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/coding_workflow)](https://www.npmjs.com/package/coding_workflow)
+[![SWE-bench Lite](https://img.shields.io/badge/SWE--bench_Lite-54.8%25_(30--case_subset)-brightgreen)](scripts/swebench/)
 
 **[中文文档 / Chinese README](README.zh-CN.md)**
 
 A **parallel multi-agent coding engine with resource governance and a self-improvement loop**. Give it a goal; it decomposes the goal into a task DAG, executes sub-agents concurrently under file locks and token budgets, verifies the result in two phases, and learns from every run.
 
 Most coding agents (Aider, Cline) work sequentially. This engine's bet is different: **decompose → parallelize → govern → verify → evolve**.
+
+## Benchmark
+
+On a 30-instance subset of **SWE-bench Lite** (real GitHub issues from `astropy` and `django`), the engine resolved **17/31 = 54.8%** of submitted instances (63% of the 27 that produced a patch and ran to evaluation). For reference: early SWE-agent scored ~18% on Lite; current open-source SOTA is 50%+. This is a subset, so the number carries sampling noise — but it lands in the top tier. Reproduce it yourself with [`scripts/swebench/`](scripts/swebench/) (raw report: [`results-lite-30.json`](scripts/swebench/results-lite-30.json)).
 
 ## Why this engine
 

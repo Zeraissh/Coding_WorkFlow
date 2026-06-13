@@ -1,0 +1,8 @@
+# 运行产物（仓库缓存、补丁、日志、HF/Docker 评测中间物）
+swebench_work/
+predictions.jsonl
+*.log
+logs/
+venv/
+run_batch.sh
+run_eval.sh
