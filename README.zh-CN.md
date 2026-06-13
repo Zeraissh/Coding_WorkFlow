@@ -1,12 +1,18 @@
 # Coding Workflow（`autocode`）
 
 [![CI](https://github.com/Zeraissh/Coding_WorkFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Zeraissh/Coding_WorkFlow/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/coding_workflow)](https://www.npmjs.com/package/coding_workflow)
+[![SWE-bench Lite](https://img.shields.io/badge/SWE--bench_Lite-54.8%25_(30题子集)-brightgreen)](scripts/swebench/)
 
 **[English README](README.md)**
 
 一个**带资源治理与自我进化闭环的并行多 Agent 编码引擎**。给它一个目标：自动分解为任务 DAG、子 Agent 在文件锁与 Token 预算约束下并发执行、两阶段验证合成交付物，并从每次运行中学习。
 
 主流编码 Agent（Aider、Cline）是串行的。本引擎押注的是另一条路线：**分解 → 并行 → 治理 → 验证 → 进化**。
+
+## 评测
+
+在 **SWE-bench Lite** 的 30 题子集上（来自 `astropy` 与 `django` 的真实 GitHub issue），引擎解决了 **17/31 = 54.8%** 的提交题目（在跑完测试的 27 题中占 63%）。参考线：早期 SWE-agent 在 Lite 上约 18%，当前开源 SOTA 50%+。这是子集结果，存在统计噪声，但已落在第一梯队。可用 [`scripts/swebench/`](scripts/swebench/) 自行复现（原始报告：[`results-lite-30.json`](scripts/swebench/results-lite-30.json)）。
 
 ## 核心能力
 
