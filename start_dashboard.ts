@@ -5,12 +5,11 @@
  * Usage: npx tsx start_dashboard.ts [port]
  */
 
-import { DashboardServer } from './src/dashboard/server.js';
+import { startServer } from './src/server/index.js';
 
 const port = parseInt(process.argv[2] || '3000', 10);
 
-const dashboard = new DashboardServer();
-dashboard.start(port);
+startServer(port);
 
 console.log(`\n✅  Dashboard is running at  http://localhost:${port}\n`);
 console.log('   Open the URL above in your browser.\n');

@@ -9,7 +9,6 @@ import { PluginManager } from '../core/pluginManager';
 import { getProjectMemory } from '../core/memory';
 import { stopWorkflow } from '../core/abort';
 import { getGovernanceSnapshot, applyGovernanceAction } from '../core/governance';
-import { WorkflowTracer } from '../core/tracer';
 
 import { fileURLToPath } from 'url';
 
@@ -44,10 +43,7 @@ workflowEvents.on('llmUsageReport', (data) => broadcastSSE('llmUsageReport', dat
 workflowEvents.on('fileChanged', (data) => broadcastSSE('fileChanged', data));
 workflowEvents.on('workflowStopped', (data) => broadcastSSE('workflowStopped', data));
 workflowEvents.on('costReport', (data) => broadcastSSE('costReport', data));
-
-// 观测性：每次工作流装配结构化 trace + 成本，写入 .workflow/traces/
-const _tracer = new WorkflowTracer();
-void _tracer;
+// 注：trace/eval 的落盘由引擎（executeWorkflow）负责，server 只做 SSE 转发
 // 流式增量/高频指标不进 eventHistory（量大且回放无意义），只对在线客户端直推
 for (const liveEvent of ['assistantDelta', 'focusUpdate']) {
   workflowEvents.on(liveEvent, (data) => {

@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased] — 修复：观测/归因下沉到引擎（之前主路径不采集）
+
+### Fixed
+- **进化闭环归因数据在主执行路径根本不采集**（潜在 bug）：Tracer/Evaluator 此前只在死代码 `dashboard/server.ts` 里实例化，而 CLI 用的 `server/index.ts` 零实例化——导致 `autocode run`/`chat`、编程式 SDK 调用、MCP 三条路径都不写 `eval_logs.json`，自我进化的输入数据缺失。现由 `executeWorkflow` 在其生命周期内统一启停观测器（`src/core/observers.ts`，begin/end 仿 abort/sandbox scope），三路径一致采集 trace + eval 归因
+
+### Changed
+- 观测属于引擎职责，从传输层（server）下沉到引擎：server 只保留 SSE 转发
+- **删死代码**：`dashboard/server.ts`（无人 import 的重复 server 实现）；`start_dashboard.ts` 改用统一的 `startServer`，消除两套 server 并存
+- 测试基线 → 242（observers 落盘 eval+trace、dispose 解绑）
+
 ## [Unreleased] — 沙箱 v2：持久容器（保留跨命令状态）
 
 ### Added
